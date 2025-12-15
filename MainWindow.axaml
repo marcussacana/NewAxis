@@ -1,0 +1,261 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:NewAxis.ViewModels"
+        xmlns:models="using:NewAxis.Models"
+        xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:material="using:Material.Icons.Avalonia"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+        x:Class="NewAxis.MainWindow"
+        x:Name="Root"
+        x:DataType="vm:MainViewModel"
+        Title="NewAxis 3D Manager"
+        Background="#1e1e1e"
+        Foreground="#ffffff">
+
+    <Window.Styles>
+        <!-- Fix for Button Hover Style -->
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#005a9e"/>
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+        <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="#004a80"/>
+        </Style>
+
+
+        <Style Selector="TextBlock.uninstalled">
+            <Setter Property="Opacity" Value="0.5"/>
+            <Setter Property="Foreground" Value="Gray"/> 
+        </Style>
+    </Window.Styles>
+
+    <Border Background="#1e1e1e">
+        <Grid ColumnDefinitions="250, *">
+            
+            <!-- Sidebar (Game List) -->
+            <Border Grid.Column="0" Background="#252526" BorderBrush="#333333" BorderThickness="0,0,1,0">
+                <Grid RowDefinitions="*, Auto">
+                    <ListBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                            <Border Padding="10">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border Width="32" Height="32" CornerRadius="4" Background="#333333" ClipToBounds="True">
+                                         <!-- Initials as fallback/icon -->
+                                         <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" Foreground="#888888"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="14" Theme="{DynamicResource BodyStrongTextBlockTheme}" 
+                                               Classes.uninstalled="{Binding !IsInstalled}"/>
+                                </StackPanel>
+                            </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Sidebar Footer -->
+                    <Border Grid.Row="1" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="10">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
+                            <Button Classes="icon" Command="{Binding ToggleHiddenGamesCommand}" Background="Transparent" 
+                                    Width="30" Height="30" Padding="0" Foreground="White"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                <Grid>
+                                    <Path Data="M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9Z" 
+                                          Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="16" Height="16" Margin="0,5,0,0"
+                                          IsVisible="{Binding ShowUninstalledGames}"
+                                          ToolTip.Tip="{Binding Localization[ToggleUninstalled]}"/>
+                                    <Path Data="M11.83,9L15,12.16C15,12.11 15,12.05 15,12A3,3 0 0,0 12,9C11.94,9 11.89,9 11.83,9M7.53,9.8L9.08,11.35C9.03,11.56 9,11.77 9,12A3,3 0 0,0 12,15C12.22,15 12.44,14.97 12.65,14.92L14.2,16.47C13.53,16.8 12.79,17 12,17A5,5 0 0,1 7,12C7,11.21 7.2,10.47 7.53,9.8M2,4.27L4.28,6.55L4.73,7C3.08,8.3 1.78,10 1,12C2.73,16.39 7,19.5 12,19.5C13.55,19.5 15.03,19.2 16.38,18.66L16.81,19.08L19.73,22L21,20.73L3.27,3M12,7A5,5 0 0,1 17,12C17,12.64 16.87,13.26 16.64,13.82L19.57,16.75C21.07,15.5 22.27,13.86 23,12C21.27,7.61 17,4.5 12,4.5C10.6,4.5 9.26,4.75 8,5.2L10.17,7.35C10.74,7.13 11.35,7 12,7Z" 
+                                          Fill="Gray" Stretch="Uniform" Width="16" Height="16" Margin="0,5,0,0"
+                                          IsVisible="{Binding !ShowUninstalledGames}"
+                                          ToolTip.Tip="{Binding Localization[ToggleUninstalled]}"/>
+                                </Grid>
+                            </Button>
+                            <Button Classes="icon" Command="{Binding ToggleSettingsCommand}" Background="Transparent" 
+                                    Width="30" Height="30" Padding="0" Foreground="White"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                <Path Data="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.35 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.35 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,13L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.04 4.95,18.95L7.44,17.95C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.95L19.05,18.95C19.27,19.04 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"
+                                      Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="16" Height="16" 
+                                      ToolTip.Tip="{Binding Localization[OpenSettings]}"/>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Main Content (Only visible if a game is selected) -->
+            <Grid Grid.Column="1" RowDefinitions="Auto, *, Auto" IsVisible="{Binding SelectedGame, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
+                
+                <!-- Top Banner -->
+                <Border Grid.Row="0" Height="250" Background="#333333" Margin="20" CornerRadius="8" ClipToBounds="True">
+                    <Grid>
+                        <!-- Fallback Title (Visible if Image fails or is transparent) -->
+                        <TextBlock Text="{Binding SelectedGame.Name}" 
+                                   FontSize="48" FontWeight="Bold" Opacity="0.1"
+                                   VerticalAlignment="Center" HorizontalAlignment="Center"
+                                   TextWrapping="Wrap"/>
+
+                        <!-- Banner Image -->
+                        <Image Source="{Binding SelectedGame.BannerPath}" Stretch="UniformToFill" />
+
+                        <!-- Overlay Gradient for text readability -->
+                        <Border Background="#99000000" VerticalAlignment="Bottom" Height="80"/>
+
+                        <Grid VerticalAlignment="Bottom" Margin="20" ColumnDefinitions="*, Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
+                                 <TextBlock Text="{Binding SelectedGame.Name}" 
+                                       FontSize="32" FontWeight="Bold" 
+                                       Foreground="White" Effect="drop-shadow(0 0 10 black)"/>
+                            </StackPanel>
+
+                            <!-- Split Button for Start/Mod Selection -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <Button Classes="primary" Command="{Binding StartGameCommand}"
+                                        Background="#007acc" Foreground="White"
+                                        BorderThickness="0" CornerRadius="4,0,0,4"
+                                        Padding="20,10" FontWeight="Bold">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="{Binding Localization[Start]}"/>
+                                        <TextBlock Text="{Binding SelectedMod, StringFormat='({0})'}" 
+                                                   Opacity="0.8" FontSize="10" VerticalAlignment="Center"
+                                                   IsVisible="{Binding SelectedMod, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Classes="secondary" Background="#0063a5" Foreground="White"
+                                        BorderThickness="0" CornerRadius="0,4,4,0"
+                                        Padding="10,10">
+                                    <Button.Flyout>
+                                        <MenuFlyout ItemsSource="{Binding SelectedGame.SupportedMods}">
+                                            <MenuFlyout.ItemContainerTheme>
+                                                <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                                    <Setter Property="Command" Value="{Binding #Root.((vm:MainViewModel)DataContext).SelectModCommand}" />
+                                                    <Setter Property="CommandParameter" Value="{Binding .}" />
+                                                    <Setter Property="Header" Value="{Binding .}" />
+                                                </ControlTheme>
+                                            </MenuFlyout.ItemContainerTheme>
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                    <TextBlock Text="▼" FontSize="10"/>
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <!-- Middle Info -->
+                <StackPanel Grid.Row="1" Margin="20" Spacing="20">
+                    <!-- Location & Actions -->
+                    <Grid ColumnDefinitions="Auto, *">
+                        <StackPanel Orientation="Vertical" Spacing="5">
+                             <TextBlock Text="{Binding Localization[InstalledAt]}" Opacity="0.7"/>
+                             <StackPanel Orientation="Horizontal" Spacing="10">
+                                 <TextBlock Text="{Binding SelectedGame.InstallPath}" FontWeight="Medium" VerticalAlignment="Center" FontSize="16"/>
+                                 
+                                 <!-- Manage Buttons -->
+                                 <Button Classes="icon" Command="{Binding BrowseCommand}" ToolTip.Tip="{Binding Localization[BrowseFolder]}" Background="Transparent" Foreground="White">
+                                     <Path Data="M20,18H4V8H20M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6Z"
+                                           Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="16" Height="16"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                 </Button>
+                                 <Button Classes="icon" Command="{Binding RemoveGameCommand}" ToolTip.Tip="{Binding Localization[RemoveGame]}" Background="Transparent" Foreground="#ff4d4d">
+                                     <Path Data="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"
+                                           Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="16" Height="16"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                 </Button>
+                             </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    
+                    <Separator Background="#333333" Height="1"/>
+
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <TextBlock Text="{Binding Localization[ActiveMod]}" Opacity="0.7"/>
+                        <TextBlock Text="{Binding SelectedMod}" FontWeight="Bold" FontSize="16"/>
+                        <TextBlock Text="{Binding Localization[By]}" Opacity="0.7" Margin="10,0,0,0"/>
+                        <TextBlock Text="{Binding Localization[UnknownCreator]}" FontStyle="Italic"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Bottom Sliders -->
+                <Border Grid.Row="2" Margin="20" Background="#2d2d2d" Padding="20" CornerRadius="4">
+                    <StackPanel Spacing="20">
+                        <StackPanel>
+                            <DockPanel LastChildFill="False">
+                                <TextBlock Text="{Binding Localization[Depth]}" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Depth, StringFormat={}{0:0}}" DockPanel.Dock="Right" FontFamily="Monospace"/>
+                            </DockPanel>
+                            <Slider Value="{Binding Depth}" Minimum="0" Maximum="100"/>
+                        </StackPanel>
+
+                        <StackPanel>
+                            <DockPanel LastChildFill="False">
+                                <TextBlock Text="{Binding Localization[Popout]}" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding Popout, StringFormat={}{0:0}}" DockPanel.Dock="Right" FontFamily="Monospace"/>
+                            </DockPanel>
+                            <Slider Value="{Binding Popout}" Minimum="0" Maximum="100"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+            
+            <!-- Empty State (No Game Selected) -->
+            <TextBlock Grid.Column="1" Text="{Binding Localization[SelectGamePrompt]}" 
+                       HorizontalAlignment="Center" VerticalAlignment="Center" 
+                       Opacity="0.5" FontSize="20"
+                       IsVisible="{Binding SelectedGame, Converter={x:Static conv:ObjectConverters.IsNull}}"/>
+
+            <!-- Settings Overlay -->
+            <Grid Grid.ColumnSpan="2" Background="#80000000" IsVisible="{Binding IsSettingsOpen}">
+                <Border Background="#252526" BorderBrush="#333333" BorderThickness="1" 
+                        Width="400" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        CornerRadius="8" Padding="20" BoxShadow="0 10 20 0 Black">
+                    <StackPanel Spacing="20">
+                        <DockPanel>
+                            <Button Classes="icon" Command="{Binding ToggleSettingsCommand}" Background="Transparent" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="White">
+                                <Path Data="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
+                                      Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="16" Height="16"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Button>
+                            <TextBlock Text="{Binding Localization[Settings]}" FontSize="24" FontWeight="Bold" DockPanel.Dock="Left"/>
+                        </DockPanel>
+                        
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="{Binding Localization[Language]}"/>
+                            <ComboBox ItemsSource="{Binding AvailableLanguages}" SelectedItem="{Binding SelectedLanguage}" HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+
+                        <CheckBox Content="{Binding Localization[InstallModTemp]}" IsChecked="{Binding InstallModTemporarily}"/>
+
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{Binding Localization[Hotkeys]}" FontWeight="SemiBold"/>
+                            <Grid ColumnDefinitions="*, *" RowDefinitions="Auto, Auto" Margin="0,5">
+                                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,5,5">
+                                    <TextBlock Text="{Binding Localization[DepthInc]}" FontSize="12" Opacity="0.7"/>
+                                    <TextBox Text="{Binding HotkeyDepthInc}" KeyDown="OnHotkeyKeyDown" Tag="DepthInc" IsReadOnly="True" Cursor="Hand"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="0" Grid.Column="1" Margin="5,0,0,5">
+                                    <TextBlock Text="{Binding Localization[DepthDec]}" FontSize="12" Opacity="0.7"/>
+                                    <TextBox Text="{Binding HotkeyDepthDec}" KeyDown="OnHotkeyKeyDown" Tag="DepthDec" IsReadOnly="True" Cursor="Hand"/>
+                                </StackPanel>
+                                 <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,5,5,0">
+                                    <TextBlock Text="{Binding Localization[PopoutInc]}" FontSize="12" Opacity="0.7"/>
+                                    <TextBox Text="{Binding HotkeyPopoutInc}" KeyDown="OnHotkeyKeyDown" Tag="PopoutInc" IsReadOnly="True" Cursor="Hand"/>
+                                </StackPanel>
+                                 <StackPanel Grid.Row="1" Grid.Column="1" Margin="5,5,0,0">
+                                    <TextBlock Text="{Binding Localization[PopoutDec]}" FontSize="12" Opacity="0.7"/>
+                                    <TextBox Text="{Binding HotkeyPopoutDec}" KeyDown="OnHotkeyKeyDown" Tag="PopoutDec" IsReadOnly="True" Cursor="Hand"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="Auto, *">
+                             <Button Classes="resetBtn" Command="{Binding ResetDefaultsCommand}" Content="{Binding Localization[ResetDefaults]}" Background="Transparent" BorderBrush="#666666" BorderThickness="1" Foreground="#cccccc"/>
+                             <Button Grid.Column="1" Command="{Binding ApplySettingsCommand}" Content="{Binding Localization[Apply]}" HorizontalAlignment="Right" Classes="primary" Background="#007acc" Foreground="White" Padding="20,5"/>
+                        </Grid>
+                        
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
