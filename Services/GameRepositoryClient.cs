@@ -199,6 +199,10 @@ namespace NewAxis.Services
         public string? MigotoPath { get; set; }
         public string? ReshadePath { get; set; }
         public string? TargetDllFileName { get; set; }
+        public string? ReshadePresetPlus { get; set; }
+        public string? OverwatchPath { get; set; }
+        public long? UseAspectRatioHeuristics { get; set; }
+        public long? DepthCopyBeforeClears { get; set; }
 
         public ImageUrls? Images { get; set; }
         public FileUrls? Files { get; set; }

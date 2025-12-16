@@ -35,7 +35,9 @@ namespace NewAxis.Services
     public class ModInstaller
     {
         private const string MOD_FILES_LIST = "3dfiles.txt";
-        private static readonly string[] _blacklistedFiles = { "nvngx_dlss.dll", "nvngx_dlssg.dll" };
+
+        //ShaderToggler.addon must be deleted at least on God Of War for 3D+ works, not sure if is with all games
+        private static readonly string[] _blacklistedFiles = { "nvngx_dlss.dll", "nvngx_dlssg.dll", "ShaderToggler.addon" };
 
         public static async Task<List<string>> InstallModAsync(
             Models.Game game,
@@ -72,11 +74,20 @@ namespace NewAxis.Services
                     }
 
                     var reshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.ReshadePath);
+
+                    // Download Overwatch if available
+                    string? overwatchLocalPath = null;
+                    if (!string.IsNullOrEmpty(gameEntry.OverwatchPath))
+                    {
+                        overwatchLocalPath = await DownloadFileAsync(repoClient, gameEntry.OverwatchPath);
+                    }
+
                     var reshadeFiles = await ReshadeExtractor.ExtractReshadeAsync(
                         reshadeLocalPath,
                         targetDirectory,
                         executablePath,
-                        gameEntry.TargetDllFileName);
+                        gameEntry,
+                        overwatchLocalPath);
 
                     installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }

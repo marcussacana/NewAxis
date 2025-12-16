@@ -20,14 +20,16 @@ namespace NewAxis.Services
         /// <param name="reshade7zPath">Path to the Reshade 7z file</param>
         /// <param name="gameInstallPath">Game installation directory</param>
         /// <param name="executablePath">Executable filename (e.g., "GoW.exe")</param>
-        /// <param name="relativeExecutablePath">Relative path to executable within game dir</param>
         /// <param name="targetDllFileName">Target DLL filename (e.g., "dxgi.dll")</param>
+        /// <param name="reshadePresetPlus">Optional ReShade preset configuration data</param>
+        /// <param name="overwatchPath">Optional path to Overwatch.fxh 7z archive</param>
         /// <returns>List of files that were created or modified</returns>
         public static async Task<List<string>> ExtractReshadeAsync(
             string reshade7zPath,
             string targetDirectory,
             string executablePath,
-            string targetDllFileName)
+            GameIndexEntry gameEntry,
+            string? overwatchPath = null)
         {
             if (!File.Exists(reshade7zPath))
             {
@@ -48,7 +50,7 @@ namespace NewAxis.Services
             string archFolder = is64Bit ? "x64" : "x32";
 
             Console.WriteLine($"[Reshade] Detected architecture: {archFolder}");
-            Console.WriteLine($"[Reshade] Target DLL: {targetDllFileName}");
+            Console.WriteLine($"[Reshade] Target DLL: {gameEntry.TargetDllFileName}");
 
             // Extract to temp directory first
             var tempExtractDir = Path.Combine(Path.GetTempPath(), $"Reshade_{Guid.NewGuid()}");
@@ -82,14 +84,11 @@ namespace NewAxis.Services
                             Directory.CreateDirectory(dir);
                         }
 
-                        await Task.Run(() =>
+                        using (var entryStream = entry.OpenEntryStream())
+                        using (var fileStream = File.Create(extractPath))
                         {
-                            using (var entryStream = entry.OpenEntryStream())
-                            using (var fileStream = File.Create(extractPath))
-                            {
-                                entryStream.CopyTo(fileStream);
-                            }
-                        });
+                            entryStream.CopyTo(fileStream);
+                        }
                     }
                 }
 
@@ -111,8 +110,8 @@ namespace NewAxis.Services
                     // Rename the main DLL (typically the largest one or named reshade.dll)
                     if (fileName.Contains("reshade", StringComparison.OrdinalIgnoreCase) || dllFiles.Length == 1)
                     {
-                        targetPath = Path.Combine(targetDirectory, targetDllFileName);
-                        Console.WriteLine($"[Reshade] Copying and renaming {fileName} -> {targetDllFileName}");
+                        targetPath = Path.Combine(targetDirectory, gameEntry.TargetDllFileName);
+                        Console.WriteLine($"[Reshade] Copying and renaming {fileName} -> {gameEntry.TargetDllFileName}");
                     }
                     else
                     {
@@ -121,22 +120,37 @@ namespace NewAxis.Services
                         Console.WriteLine($"[Reshade] Copying {fileName}");
                     }
 
-                    // Create backup if file exists (never overwrite .disabled backups)
-                    if (File.Exists(targetPath))
-                    {
-                        var backupPath = targetPath + ".disabled";
-                        if (!File.Exists(backupPath))
-                        {
-                            File.Copy(targetPath, backupPath, overwrite: false);
-                            Console.WriteLine($"[Reshade] Created backup: {Path.GetFileName(backupPath)}");
-                        }
-                    }
-
-                    File.Copy(srcDll, targetPath, overwrite: true);
+                    File.Copy(srcDll, targetPath, true);
                     installedFiles.Add(targetPath);
                 }
 
-                Console.WriteLine("[Reshade] Extraction complete!");
+                // Copy any other non-DLL files (config, shaders, etc. if any)
+                var otherFiles = Directory.GetFiles(tempExtractDir).Where(f => !f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+                foreach (var srcFile in otherFiles)
+                {
+                    var fileName = Path.GetFileName(srcFile);
+                    var targetPath = Path.Combine(targetDirectory, fileName);
+                    File.Copy(srcFile, targetPath, true);
+                    installedFiles.Add(targetPath);
+                }
+
+                if (!string.IsNullOrEmpty(gameEntry.ReshadePresetPlus))
+                {
+                    var presetPath = Path.Combine(targetDirectory, "ReShadePreset.ini");
+                    var presetContent = GenerateReshadePresetIni(gameEntry.ReshadePresetPlus);
+                    await File.WriteAllTextAsync(presetPath, presetContent);
+                    installedFiles.Add(presetPath);
+                }
+
+                if (!string.IsNullOrEmpty(overwatchPath) && File.Exists(overwatchPath))
+                {
+                    var overwatchFiles = await ExtractOverwatchAsync(overwatchPath, targetDirectory);
+                    installedFiles.AddRange(overwatchFiles);
+                }
+
+                // 5. Generate ReShade.ini configuration
+                UpdateReshadeIni(targetDirectory, gameEntry.UseAspectRatioHeuristics, gameEntry.DepthCopyBeforeClears);
+
                 return installedFiles;
             }
             finally
@@ -164,6 +178,99 @@ namespace NewAxis.Services
                 var headers = peReader.PEHeaders;
                 return headers.PEHeader != null && headers.PEHeader.Magic == PEMagic.PE32Plus;
             }
+        }
+
+        /// <summary>
+        /// Generates the ReShadePreset.ini content from preset data
+        /// </summary>
+        private static string GenerateReshadePresetIni(string presetData)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("PreprocessorDefinitions = ");
+            sb.AppendLine("Techniques = Depth3D_Acer@SpatialLabs_Depth3D.fx");
+            sb.AppendLine("TechniqueSorting = Depth3D_Acer@SpatialLabs_Depth3D.fx");
+            sb.AppendLine();
+            sb.AppendLine("[SpatialLabs_Depth3D.fx]");
+            sb.AppendLine(presetData);
+
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Extracts Overwatch.fxh from a 7z archive (file has no name inside)
+        /// </summary>
+        private static async Task<List<string>> ExtractOverwatchAsync(string overwatch7zPath, string targetDirectory)
+        {
+            var tempExtractDir = Path.Combine(Path.GetTempPath(), $"Overwatch_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempExtractDir);
+            var extractedFiles = new List<string>();
+
+            try
+            {
+                // Extract the 7z archive
+                using (var archive = ArchiveFactory.Open(overwatch7zPath))
+                {
+                    var entry = archive.Entries.FirstOrDefault(e => !e.IsDirectory);
+                    if (entry == null)
+                    {
+                        throw new Exception("No file found in Overwatch archive");
+                    }
+
+                    // Extract to temp with any name
+                    var tempFilePath = Path.Combine(tempExtractDir, "temp_file");
+                    await Task.Run(() =>
+                    {
+                        using (var entryStream = entry.OpenEntryStream())
+                        using (var fileStream = File.Create(tempFilePath))
+                        {
+                            entryStream.CopyTo(fileStream);
+                        }
+                    });
+
+                    // Copy to target directory as Overwatch.fxh
+                    var targetPath = Path.Combine(targetDirectory, "Overwatch.fxh");
+                    File.Copy(tempFilePath, targetPath, overwrite: true);
+                    extractedFiles.Add(targetPath);
+                }
+                return extractedFiles;
+            }
+            finally
+            {
+                // Cleanup temp directory
+                try
+                {
+                    if (Directory.Exists(tempExtractDir))
+                    {
+                        Directory.Delete(tempExtractDir, recursive: true);
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private static void UpdateReshadeIni(string targetDirectory, long? heuristics, long? depthCopy)
+        {
+            var iniPath = Path.Combine(targetDirectory, "ReShade.ini");
+
+            var parser = new IniFileParser();
+            if (File.Exists(iniPath))
+            {
+                parser.Load(iniPath);
+            }
+
+            // [INSTALL] Section
+            parser.SetValue("INSTALL", "BasePath", targetDirectory);
+
+            // [GENERAL] Section
+            parser.SetValue("GENERAL", "IsNative3D", "0");
+
+            // [DEPTH] Section
+            if (heuristics.HasValue) parser.SetValue("DEPTH", "UseAspectRatioHeuristics", heuristics.Value.ToString());
+            if (depthCopy.HasValue) parser.SetValue("DEPTH", "DepthCopyBeforeClears", depthCopy.Value.ToString());
+
+
+
+            parser.Save(iniPath);
         }
     }
 }
