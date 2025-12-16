@@ -38,6 +38,9 @@ public class MainViewModel : ViewModelBase
 
                 // Carrega banner automaticamente
                 _ = LoadGameBannerAsync(_selectedGame);
+
+                // Carrega config do jogo (truegame.ini)
+                LoadGameConfig(_selectedGame);
             }
         }
     }
@@ -671,6 +674,9 @@ public class MainViewModel : ViewModelBase
                     Popout);
             }
 
+            // Sync truegame.ini configuration
+            SyncTrueGameIni(SelectedGame);
+
             // Launch game
             var exePath = System.IO.Path.Combine(
                 SelectedGame.InstallPath,
@@ -695,9 +701,8 @@ public class MainViewModel : ViewModelBase
             {
                 // Wait for game to exit
                 await Task.Run(() => process.WaitForExit());
-                Debug.WriteLine("Game closed");
 
-                await Task.Delay(10000);
+                await Task.Delay(6000);
 
                 var childs = Process.GetProcessesByName(System.IO.Path.GetFileNameWithoutExtension(exePath));
 
@@ -777,5 +782,133 @@ public class MainViewModel : ViewModelBase
         {
             SelectedMod = mod;
         }
+    }
+
+    private void LoadGameConfig(Game? game)
+    {
+        if (game == null || string.IsNullOrEmpty(game.InstallPath)) return;
+
+        try
+        {
+            string dirPath = game.InstallPath;
+            if (game.Tag is GameIndexEntry gameEntry && !string.IsNullOrEmpty(gameEntry.RelativeExecutablePath))
+            {
+                dirPath = System.IO.Path.Combine(game.InstallPath, gameEntry.RelativeExecutablePath);
+            }
+
+            var iniPath = System.IO.Path.Combine(dirPath, "truegame.ini");
+            if (System.IO.File.Exists(iniPath))
+            {
+                var parser = new Services.IniFileParser();
+                parser.Load(iniPath);
+
+                var depthStr = parser.GetValue("DEPTH", "Depth");
+                if (double.TryParse(depthStr, out double d))
+                {
+                    Depth = d;
+                }
+
+                var popoutStr = parser.GetValue("DEPTH", "Popout");
+                if (double.TryParse(popoutStr, out double p))
+                {
+                    Popout = p;
+                }
+
+                Debug.WriteLine($"Loaded config for {game.Name}: Depth={Depth}, Popout={Popout}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error loading game config: {ex.Message}");
+        }
+    }
+
+    private void SyncTrueGameIni(Game? game)
+    {
+        if (game == null || string.IsNullOrEmpty(game.InstallPath)) return;
+
+        try
+        {
+            string dirPath = game.InstallPath;
+            if (game.Tag is GameIndexEntry gameEntry && !string.IsNullOrEmpty(gameEntry.RelativeExecutablePath))
+            {
+                dirPath = System.IO.Path.Combine(game.InstallPath, gameEntry.RelativeExecutablePath);
+            }
+
+            var iniPath = System.IO.Path.Combine(dirPath, "truegame.ini");
+            if (!System.IO.File.Exists(iniPath)) return;
+
+            var parser = new Services.IniFileParser();
+            parser.Load(iniPath);
+
+            // Helper to format: Code,Alt,Ctrl,Shift
+            string FormatKey(Key key, KeyModifiers mods)
+            {
+                int vk = GetWin32KeyCode(key);
+                int alt = mods.HasFlag(KeyModifiers.Alt) ? 1 : 0;
+                int ctrl = mods.HasFlag(KeyModifiers.Control) ? 1 : 0;
+                int shift = mods.HasFlag(KeyModifiers.Shift) ? 1 : 0;
+                return $"{vk},{alt},{ctrl},{shift}";
+            }
+
+            parser.SetValue("INPUT", "IncreaseDepth", FormatKey(KeyDepthInc, ModDepthInc));
+            parser.SetValue("INPUT", "DecreaseDepth", FormatKey(KeyDepthDec, ModDepthDec));
+            parser.SetValue("INPUT", "IncreasePopout", FormatKey(KeyPopoutInc, ModPopoutInc));
+            parser.SetValue("INPUT", "DecreasePopout", FormatKey(KeyPopoutDec, ModPopoutDec));
+
+            // Sync current slider values too
+            parser.SetValue("DEPTH", "Depth", ((int)Depth).ToString());
+            parser.SetValue("DEPTH", "Popout", ((int)Popout).ToString());
+
+            parser.Save(iniPath);
+            Debug.WriteLine("Synced config to truegame.ini");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to sync truegame.ini: {ex.Message}");
+        }
+    }
+
+    private int GetWin32KeyCode(Key key)
+    {
+        // Simple mapping for common keys used in game mods
+        // Function keys
+        if (key >= Key.F1 && key <= Key.F24)
+            return 112 + (key - Key.F1);
+
+        // Standard keys A-Z
+        if (key >= Key.A && key <= Key.Z)
+            return 65 + (key - Key.A);
+
+        // Numbers 0-9
+        if (key >= Key.D0 && key <= Key.D9)
+            return 48 + (key - Key.D0);
+
+        // Arrow keys
+        switch (key)
+        {
+            case Key.Left: return 37;
+            case Key.Up: return 38;
+            case Key.Right: return 39;
+            case Key.Down: return 40;
+            case Key.Insert: return 45;
+            case Key.Delete: return 46;
+            case Key.Home: return 36;
+            case Key.End: return 35;
+            case Key.PageUp: return 33;
+            case Key.PageDown: return 34;
+            case Key.Space: return 32;
+            case Key.Enter: return 13;
+            case Key.Escape: return 27;
+            case Key.Tab: return 9;
+            case Key.Back: return 8;
+        }
+
+        // Fallback for Numpad
+        if (key >= Key.NumPad0 && key <= Key.NumPad9)
+            return 96 + (key - Key.NumPad0);
+
+        // If unknown, return 0 or maybe try to cast if values align (they often don't exactly match Win32 VK)
+        return 0;
     }
 }

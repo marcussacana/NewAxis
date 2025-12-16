@@ -208,7 +208,7 @@
                                 <TextBlock Text="{Binding Localization[Depth]}" FontWeight="Bold"/>
                                 <TextBlock Text="{Binding Depth, StringFormat={}{0:0}}" DockPanel.Dock="Right" FontFamily="Monospace"/>
                             </DockPanel>
-                            <Slider Value="{Binding Depth}" Minimum="0" Maximum="100"/>
+                            <Slider Value="{Binding Depth}" Minimum="0" Maximum="150"/>
                         </StackPanel>
 
                         <StackPanel>
@@ -216,7 +216,7 @@
                                 <TextBlock Text="{Binding Localization[Popout]}" FontWeight="Bold"/>
                                 <TextBlock Text="{Binding Popout, StringFormat={}{0:0}}" DockPanel.Dock="Right" FontFamily="Monospace"/>
                             </DockPanel>
-                            <Slider Value="{Binding Popout}" Minimum="0" Maximum="100"/>
+                            <Slider Value="{Binding Popout}" Minimum="0" Maximum="150"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

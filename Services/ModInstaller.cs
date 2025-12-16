@@ -79,7 +79,7 @@ namespace NewAxis.Services
                     }
 
                     // Create truegame.ini for 3D Ultra mod
-                    await CreateTrueGameIniAsync(gameInstallPath, depth, popout);
+                    await CreateTrueGameIniAsync(gameInstallPath, relativeExecutablePath, depth, popout);
                 }
 
                 // Write installed files list
@@ -165,9 +165,9 @@ namespace NewAxis.Services
         /// <summary>
         /// Creates truegame.ini file with default content and updates Depth/Popout values
         /// </summary>
-        private static async Task CreateTrueGameIniAsync(string gameInstallPath, double depth, double popout)
+        private static async Task CreateTrueGameIniAsync(string gameInstallPath, string relativeExecutablePath, double depth, double popout)
         {
-            var iniPath = Path.Combine(gameInstallPath, "truegame.ini");
+            var iniPath = Path.Combine(gameInstallPath, relativeExecutablePath, "truegame.ini");
 
             if (File.Exists(iniPath))
                 return;
