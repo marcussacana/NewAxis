@@ -27,8 +27,7 @@ namespace NewAxis.Services
         /// <returns>List of files that were created or modified</returns>
         public static async Task<List<string>> ExtractMigotoAsync(
             string migoto7zPath,
-            string gameInstallPath,
-            string relativeExecutablePath)
+            string targetDirectory)
         {
             if (!File.Exists(migoto7zPath))
             {
@@ -79,10 +78,10 @@ namespace NewAxis.Services
                     Console.WriteLine("[Migoto] Found architecture-specific subdirectories (x64/x32)");
 
                     // Find the target executable
-                    var executablePath = Directory.GetFiles(Path.Combine(gameInstallPath, relativeExecutablePath), "*.exe", SearchOption.AllDirectories).FirstOrDefault();
+                    var executablePath = Directory.GetFiles(targetDirectory, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
                     if (executablePath is null || !File.Exists(executablePath))
                     {
-                        throw new FileNotFoundException($"Target executable not found: {executablePath}");
+                        throw new FileNotFoundException($"Target executable not found in: {targetDirectory}");
                     }
 
                     // Detect executable architecture
@@ -102,13 +101,13 @@ namespace NewAxis.Services
                 if (jsonInstructionsPath != null)
                 {
                     Console.WriteLine($"[Migoto] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
-                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, sourceSubDir, gameInstallPath, relativeExecutablePath);
+                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, sourceSubDir, targetDirectory);
                 }
                 else
                 {
                     // No JSON instructions, just copy all files
                     Console.WriteLine("[Migoto] No JSON instructions found, copying all files...");
-                    installedFiles = await CopyAllFilesAsync(sourceSubDir, gameInstallPath, relativeExecutablePath);
+                    installedFiles = await CopyAllFilesAsync(sourceSubDir, targetDirectory);
                 }
 
                 if (installedFiles.Any(x => Path.GetFileName(x) == "nvapi64.dll"))
@@ -119,8 +118,7 @@ namespace NewAxis.Services
                     {
                         Console.WriteLine("[Migoto] AMD GPU detected. Applying AMD fix to nvapi64.dll...");
 
-                        var relativeNvapiPath = installedFiles.First(x => Path.GetFileName(x) == "nvapi64.dll");
-                        var fullNvapiPath = Path.Combine(gameInstallPath, relativeNvapiPath);
+                        var fullNvapiPath = installedFiles.First(x => Path.GetFileName(x) == "nvapi64.dll");
                         installedFiles.AddRange(await ApplyAMDfix(fullNvapiPath));
                     }
                 }
@@ -174,8 +172,7 @@ namespace NewAxis.Services
         private static async Task<List<string>> ApplyJsonInstructionsAsync(
             string jsonPath,
             string sourceDir,
-            string gameInstallPath,
-            string relativeExecutablePath)
+            string targetDirectory)
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
@@ -184,11 +181,10 @@ namespace NewAxis.Services
             if (instructions?.Files == null || instructions.Files.Count == 0)
             {
                 Console.WriteLine("[Migoto] No file instructions in JSON");
-                return await CopyAllFilesAsync(sourceDir, gameInstallPath, relativeExecutablePath);
+                return await CopyAllFilesAsync(sourceDir, targetDirectory);
             }
 
-            var targetDir = Path.Combine(gameInstallPath, relativeExecutablePath ?? "");
-            Directory.CreateDirectory(targetDir);
+            Directory.CreateDirectory(targetDirectory);
 
             Console.WriteLine($"[Migoto] Processing {instructions.Files.Count} file instructions...");
 
@@ -227,7 +223,7 @@ namespace NewAxis.Services
                 // Copy file to each target name
                 foreach (var targetName in targetNames)
                 {
-                    var targetPath = Path.Combine(targetDir, targetName);
+                    var targetPath = Path.Combine(targetDirectory, targetName);
 
                     // Create backup if file exists (never overwrite .disabled backups)
                     if (File.Exists(targetPath))
@@ -242,18 +238,17 @@ namespace NewAxis.Services
 
                     File.Copy(sourcePath, targetPath, overwrite: true);
                     Console.WriteLine($"[Migoto] {fileInstruction.Source} -> {targetName}");
-                    installedFiles.Add(Path.GetRelativePath(gameInstallPath, targetPath));
+                    installedFiles.Add(targetPath);
                 }
             }
 
             return installedFiles;
         }
 
-        private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string gameInstallPath, string relativeExecutablePath)
+        private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string targetDirectory)
         {
             var installedFiles = new List<string>();
-            var targetDir = Path.Combine(gameInstallPath, relativeExecutablePath ?? "");
-            Directory.CreateDirectory(targetDir);
+            Directory.CreateDirectory(targetDirectory);
 
             var allFiles = Directory.GetFiles(sourceDir, "*.*", SearchOption.AllDirectories);
             Console.WriteLine($"[Migoto] Copying {allFiles.Length} files...");
@@ -261,7 +256,7 @@ namespace NewAxis.Services
             foreach (var file in allFiles)
             {
                 var relativePath = Path.GetRelativePath(sourceDir, file);
-                var targetPath = Path.Combine(targetDir, relativePath);
+                var targetPath = Path.Combine(targetDirectory, relativePath);
 
                 var dir = Path.GetDirectoryName(targetPath);
                 if (!string.IsNullOrEmpty(dir))
@@ -287,7 +282,7 @@ namespace NewAxis.Services
                 }
 
                 await Task.Run(() => File.Copy(file, targetPath, overwrite: true));
-                installedFiles.Add(Path.GetRelativePath(gameInstallPath, targetPath));
+                installedFiles.Add(targetPath);
             }
 
             return installedFiles;

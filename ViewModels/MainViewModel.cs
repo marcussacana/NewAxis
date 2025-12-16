@@ -664,12 +664,9 @@ public class MainViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(SelectedMod) && _repoClient != null)
             {
                 await ModInstaller.InstallModAsync(
-                    SelectedGame.InstallPath,
-                    gameEntry.ExecutablePath ?? "",
-                    gameEntry.RelativeExecutablePath ?? "",
+                    SelectedGame,
                     SelectedMod,
                     _repoClient,
-                    gameEntry,
                     Depth,
                     Popout);
             }
@@ -711,6 +708,7 @@ public class MainViewModel : ViewModelBase
                 // Uninstall mod if temporary installation is enabled
                 if (InstallModTemporarily && !string.IsNullOrEmpty(SelectedMod))
                 {
+                    await Task.Delay(3000);
                     await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
                     Debug.WriteLine("Temporary mod uninstalled");
                 }

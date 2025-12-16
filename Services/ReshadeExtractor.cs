@@ -25,9 +25,8 @@ namespace NewAxis.Services
         /// <returns>List of files that were created or modified</returns>
         public static async Task<List<string>> ExtractReshadeAsync(
             string reshade7zPath,
-            string gameInstallPath,
+            string targetDirectory,
             string executablePath,
-            string relativeExecutablePath,
             string targetDllFileName)
         {
             if (!File.Exists(reshade7zPath))
@@ -38,7 +37,7 @@ namespace NewAxis.Services
             var installedFiles = new List<string>();
 
             // Determine full path to executable
-            var fullExePath = Path.Combine(gameInstallPath, relativeExecutablePath ?? "", executablePath);
+            var fullExePath = Path.Combine(targetDirectory, executablePath);
             if (!File.Exists(fullExePath))
             {
                 throw new FileNotFoundException($"Game executable not found: {fullExePath}");
@@ -102,8 +101,7 @@ namespace NewAxis.Services
                 }
 
                 // Copy files to game directory
-                var targetDir = Path.Combine(gameInstallPath, relativeExecutablePath ?? "");
-                Directory.CreateDirectory(targetDir);
+                Directory.CreateDirectory(targetDirectory);
 
                 foreach (var srcDll in dllFiles)
                 {
@@ -113,13 +111,13 @@ namespace NewAxis.Services
                     // Rename the main DLL (typically the largest one or named reshade.dll)
                     if (fileName.Contains("reshade", StringComparison.OrdinalIgnoreCase) || dllFiles.Length == 1)
                     {
-                        targetPath = Path.Combine(targetDir, targetDllFileName);
+                        targetPath = Path.Combine(targetDirectory, targetDllFileName);
                         Console.WriteLine($"[Reshade] Copying and renaming {fileName} -> {targetDllFileName}");
                     }
                     else
                     {
                         // Keep original name for supporting DLLs
-                        targetPath = Path.Combine(targetDir, fileName);
+                        targetPath = Path.Combine(targetDirectory, fileName);
                         Console.WriteLine($"[Reshade] Copying {fileName}");
                     }
 
@@ -135,7 +133,7 @@ namespace NewAxis.Services
                     }
 
                     File.Copy(srcDll, targetPath, overwrite: true);
-                    installedFiles.Add(Path.GetRelativePath(gameInstallPath, targetPath));
+                    installedFiles.Add(targetPath);
                 }
 
                 Console.WriteLine("[Reshade] Extraction complete!");

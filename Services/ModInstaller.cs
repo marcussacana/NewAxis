@@ -16,18 +16,28 @@ namespace NewAxis.Services
         private const string MOD_FILES_LIST = "3dfiles.txt";
 
         public static async Task<List<string>> InstallModAsync(
-            string gameInstallPath,
-            string executablePath,
-            string relativeExecutablePath,
+            NewAxis.Models.Game game,
             string modType,
             GameRepositoryClient repoClient,
-            Services.GameIndexEntry gameEntry,
             double depth,
             double popout)
         {
             var installedFiles = new List<string>();
 
-            Console.WriteLine($"[ModInstaller] Installing {modType} mod...");
+            // Extract game info
+            var gameInstallPath = game.InstallPath;
+            if (string.IsNullOrEmpty(gameInstallPath)) throw new Exception("Game install path is empty");
+
+            if (!(game.Tag is Services.GameIndexEntry gameEntry))
+            {
+                throw new Exception("Game metadata (Tag) is missing or invalid");
+            }
+
+            var executablePath = gameEntry.ExecutablePath ?? "";
+            var relativeExecutablePath = gameEntry.RelativeExecutablePath ?? "";
+            var targetDirectory = Path.Combine(gameInstallPath, relativeExecutablePath);
+
+            Console.WriteLine($"[ModInstaller] Installing {modType} mod for {game.Name}...");
 
             try
             {
@@ -42,12 +52,11 @@ namespace NewAxis.Services
                     var reshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.ReshadePath);
                     var reshadeFiles = await ReshadeExtractor.ExtractReshadeAsync(
                         reshadeLocalPath,
-                        gameInstallPath,
+                        targetDirectory,
                         executablePath,
-                        relativeExecutablePath,
                         gameEntry.TargetDllFileName);
 
-                    installedFiles.AddRange(reshadeFiles);
+                    installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
                 else if (modType == "3D Ultra")
                 {
@@ -60,10 +69,9 @@ namespace NewAxis.Services
                     var migotoLocalPath = await DownloadFileAsync(repoClient, gameEntry.MigotoPath);
                     var migotoFiles = await MigotoExtractor.ExtractMigotoAsync(
                         migotoLocalPath,
-                        gameInstallPath,
-                        relativeExecutablePath);
+                        targetDirectory);
 
-                    installedFiles.AddRange(migotoFiles);
+                    installedFiles.AddRange(migotoFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
 
                     // Install custom shaders if available
                     if (!string.IsNullOrEmpty(gameEntry.ShaderMod))
@@ -72,14 +80,13 @@ namespace NewAxis.Services
                         // Extract shaders (using Migoto extractor for now as it handles 7z generically)
                         var shaderFiles = await MigotoExtractor.ExtractMigotoAsync(
                             shaderLocalPath,
-                            gameInstallPath,
-                            relativeExecutablePath);
+                            targetDirectory);
 
-                        installedFiles.AddRange(shaderFiles);
+                        installedFiles.AddRange(shaderFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                     }
 
                     // Create truegame.ini for 3D Ultra mod
-                    await CreateTrueGameIniAsync(gameInstallPath, relativeExecutablePath, depth, popout);
+                    await CreateTrueGameIniAsync(targetDirectory, depth, popout);
                 }
 
                 // Write installed files list
@@ -165,9 +172,9 @@ namespace NewAxis.Services
         /// <summary>
         /// Creates truegame.ini file with default content and updates Depth/Popout values
         /// </summary>
-        private static async Task CreateTrueGameIniAsync(string gameInstallPath, string relativeExecutablePath, double depth, double popout)
+        private static async Task CreateTrueGameIniAsync(string targetDirectory, double depth, double popout)
         {
-            var iniPath = Path.Combine(gameInstallPath, relativeExecutablePath, "truegame.ini");
+            var iniPath = Path.Combine(targetDirectory, "truegame.ini");
 
             if (File.Exists(iniPath))
                 return;

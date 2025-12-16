@@ -97,7 +97,7 @@
             <Grid Grid.Column="1" RowDefinitions="Auto, *, Auto" IsVisible="{Binding SelectedGame, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
                 
                 <!-- Top Banner -->
-                <Border Grid.Row="0" Height="300" Background="#333333" Margin="20" CornerRadius="8" ClipToBounds="True">
+                <Border Grid.Row="0" Height="400" Background="#333333" Margin="20" CornerRadius="8" ClipToBounds="True">
                     <Grid>
                         <!-- Fallback Title (Visible if Image fails or is transparent) -->
                         <TextBlock Text="{Binding SelectedGame.Name}" 
@@ -196,7 +196,12 @@
                         <TextBlock Text="{Binding Localization[ActiveMod]}" Opacity="0.7"/>
                         <TextBlock Text="{Binding SelectedMod}" FontWeight="Bold" FontSize="16"/>
                         <TextBlock Text="{Binding Localization[By]}" Opacity="0.7" Margin="10,0,0,0"/>
-                        <TextBlock Text="{Binding Localization[UnknownCreator]}" FontStyle="Italic"/>
+                        <Panel>
+                            <TextBlock Text="{Binding SelectedGame.Creator}" FontStyle="Italic" 
+                                       IsVisible="{Binding SelectedGame.Creator, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                            <TextBlock Text="{Binding Localization[UnknownCreator]}" FontStyle="Italic"
+                                       IsVisible="{Binding SelectedGame.Creator, Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
+                        </Panel>
                     </StackPanel>
                 </StackPanel>
 
