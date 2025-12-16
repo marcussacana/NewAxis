@@ -15,7 +15,7 @@ public class LocalizationService : INotifyPropertyChanged
 
     private string _currentLanguage = "en-US";
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new();
-    
+
     // Fallback dictionary (English) embedded in code to ensure app works even if JSONs are missing
     private readonly Dictionary<string, string> _embeddedFallback = new()
     {
@@ -23,6 +23,7 @@ public class LocalizationService : INotifyPropertyChanged
         { "InstalledAt", "Installed at:" }, { "By", "by" }, { "SelectMod", "Select Mod" },
         { "Settings", "Settings" }, { "Language", "Language" },
         { "InstallModTemp", "Install mod temporarily" }, { "Hotkeys", "Hotkeys" },
+        { "DisableDLSS", "Disable DLSS/FrameGen" },
         { "DepthInc", "Increase Depth" }, { "DepthDec", "Decrease Depth" },
         { "PopoutInc", "Increase Popout" }, { "PopoutDec", "Decrease Popout" },
         { "ResetDefaults", "Reset Defaults" }, { "Apply", "Apply" },
@@ -37,14 +38,14 @@ public class LocalizationService : INotifyPropertyChanged
     private LocalizationService()
     {
         LoadLanguages();
-        
+
         // Ensure at least English is active if nothing loaded or found
         if (!AvailableLanguages.Contains("en-US"))
         {
             _translations["en-US"] = _embeddedFallback;
             AvailableLanguages.Add("en-US");
         }
-        
+
         // If we have other languages but en-US was added via fallback, ensure it's in translations
         if (!_translations.ContainsKey("en-US"))
         {
@@ -74,7 +75,7 @@ public class LocalizationService : INotifyPropertyChanged
                     var code = Path.GetFileNameWithoutExtension(file);
                     var json = File.ReadAllText(file);
                     var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                    
+
                     if (dict != null)
                     {
                         _translations[code] = dict;

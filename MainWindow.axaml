@@ -254,6 +254,7 @@
                         </StackPanel>
 
                         <CheckBox Content="{Binding Localization[InstallModTemp]}" IsChecked="{Binding InstallModTemporarily}"/>
+                        <CheckBox Content="{Binding Localization[DisableDLSS]}" IsChecked="{Binding DisableDLSS}"/>
 
                         <StackPanel Spacing="10">
                             <TextBlock Text="{Binding Localization[Hotkeys]}" FontWeight="SemiBold"/>

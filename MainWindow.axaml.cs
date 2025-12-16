@@ -24,6 +24,25 @@ public partial class MainWindow : Window
 
             return result.Count > 0 ? result[0].Path.LocalPath : null;
         };
+
+        vm.RequestShutdownAction = () =>
+        {
+            vm.ShutdownRequested = false; // Reset flag to avoid loop if we needed to check it again
+            Close();
+        };
+    }
+
+    protected override void OnClosing(WindowClosingEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && vm.IsGameSessionActive)
+        {
+            e.Cancel = true;
+            vm.ShutdownRequested = true;
+            Hide();
+            return; // Don't call base or continue
+        }
+
+        base.OnClosing(e);
     }
 
     private void OnHotkeyKeyDown(object sender, Avalonia.Input.KeyEventArgs e)

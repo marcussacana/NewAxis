@@ -331,6 +331,13 @@ public class MainViewModel : ViewModelBase
         set => SetField(ref _installModTemporarily, value);
     }
 
+    private bool _disableDLSS = true;
+    public bool DisableDLSS
+    {
+        get => _disableDLSS;
+        set => SetField(ref _disableDLSS, value);
+    }
+
     private string _hotkeyDepthInc = "Ctrl+Up";
     public string HotkeyDepthInc
     {
@@ -504,6 +511,9 @@ public class MainViewModel : ViewModelBase
             string? showUninstall = _iniParser.GetValue("Settings", "ShowUninstalledGames");
             if (bool.TryParse(showUninstall, out bool bShowUninstall)) ShowUninstalledGames = bShowUninstall;
 
+            string? disableDlss = _iniParser.GetValue("Settings", "DisableDLSS");
+            if (bool.TryParse(disableDlss, out bool bDisableDlss)) DisableDLSS = bDisableDlss;
+
             LoadHotkey("DepthInc", (d, k, m) => { HotkeyDepthInc = d; KeyDepthInc = k; ModDepthInc = m; });
             LoadHotkey("DepthDec", (d, k, m) => { HotkeyDepthDec = d; KeyDepthDec = k; ModDepthDec = m; });
             LoadHotkey("PopoutInc", (d, k, m) => { HotkeyPopoutInc = d; KeyPopoutInc = k; ModPopoutInc = m; });
@@ -544,6 +554,7 @@ public class MainViewModel : ViewModelBase
             _iniParser.SetValue("Settings", "Language", SelectedLanguage);
             _iniParser.SetValue("Settings", "InstallModTemporarily", InstallModTemporarily.ToString());
             _iniParser.SetValue("Settings", "ShowUninstalledGames", ShowUninstalledGames.ToString());
+            _iniParser.SetValue("Settings", "DisableDLSS", DisableDLSS.ToString());
 
             void SaveHotkey(string prefix, string display, Key key, KeyModifiers mod)
             {
@@ -626,8 +637,10 @@ public class MainViewModel : ViewModelBase
 
     private void ExecuteResetDefaults(object? obj)
     {
+        IsSettingsOpen = true;
         SelectedLanguage = "en-US";
         InstallModTemporarily = true;
+        DisableDLSS = true;
         ShowUninstalledGames = true;
         HotkeyDepthInc = "Ctrl+Up";
         KeyDepthInc = Key.Up; ModDepthInc = KeyModifiers.Control;
@@ -644,8 +657,21 @@ public class MainViewModel : ViewModelBase
         SaveConfig();
     }
 
+    private bool _isGameSessionActive;
+    public bool IsGameSessionActive
+    {
+        get => _isGameSessionActive;
+        set => SetField(ref _isGameSessionActive, value);
+    }
+
+    public bool ShutdownRequested { get; set; }
+
+    public Action? RequestShutdownAction { get; set; }
+
     private async void ExecuteStartGame(object? obj)
     {
+        if (IsGameSessionActive) return;
+
         if (SelectedGame == null || string.IsNullOrEmpty(SelectedGame.InstallPath))
         {
             System.Diagnostics.Debug.WriteLine("No game selected or game not installed");
@@ -660,15 +686,27 @@ public class MainViewModel : ViewModelBase
 
         try
         {
+            IsGameSessionActive = true;
+
             // Install mod if one is selected
             if (!string.IsNullOrEmpty(SelectedMod) && _repoClient != null)
             {
+                var settings = new ModInstallationSettings
+                {
+                    Depth = Depth,
+                    Popout = Popout,
+                    DisableBlacklistedDlls = DisableDLSS,
+                    DepthInc = new HotkeyDefinition { Key = KeyDepthInc, Modifiers = ModDepthInc },
+                    DepthDec = new HotkeyDefinition { Key = KeyDepthDec, Modifiers = ModDepthDec },
+                    PopoutInc = new HotkeyDefinition { Key = KeyPopoutInc, Modifiers = ModPopoutInc },
+                    PopoutDec = new HotkeyDefinition { Key = KeyPopoutDec, Modifiers = ModPopoutDec }
+                };
+
                 await ModInstaller.InstallModAsync(
                     SelectedGame,
                     SelectedMod,
                     _repoClient,
-                    Depth,
-                    Popout);
+                    settings);
             }
 
             // Sync truegame.ini configuration
@@ -683,6 +721,7 @@ public class MainViewModel : ViewModelBase
             if (!System.IO.File.Exists(exePath))
             {
                 Debug.WriteLine($"Executable not found: {exePath}");
+                IsGameSessionActive = false; // Early exit reset
                 return;
             }
 
@@ -717,6 +756,22 @@ public class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             Debug.WriteLine($"Error starting game: {ex.Message}");
+        }
+        finally
+        {
+            IsGameSessionActive = false;
+
+            if (ShutdownRequested)
+            {
+                Debug.WriteLine("Shutdown was requested during game session. Exiting now.");
+                // Ensure we are on UI thread if we needed to touch UI, but for Environment.Exit it doesn't matter much.
+                // But better to use the proper shutdown path if possible. 
+                // Since this is void async, we can just call the action.
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    RequestShutdownAction?.Invoke();
+                });
+            }
         }
     }
 
