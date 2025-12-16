@@ -43,8 +43,18 @@
                             <Border Padding="10">
                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                     <Border Width="32" Height="32" CornerRadius="4" Background="#333333" ClipToBounds="True">
-                                         <!-- Initials as fallback/icon -->
-                                         <TextBlock Text="{Binding Initials}" HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" Foreground="#888888"/>
+                                        <Grid>
+                                            <!-- Icon Image if available -->
+                                            <Image Source="{Binding IconImage}" 
+                                                   Stretch="UniformToFill"
+                                                   IsVisible="{Binding IconImage, Converter={x:Static conv:ObjectConverters.IsNotNull}}"/>
+                                            
+                                            <!-- Initials as fallback -->
+                                            <TextBlock Text="{Binding Initials}" 
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" 
+                                                       FontWeight="Bold" Foreground="#888888"
+                                                       IsVisible="{Binding IconImage, Converter={x:Static conv:ObjectConverters.IsNull}}"/>
+                                        </Grid>
                                     </Border>
                                     <TextBlock Text="{Binding Name}" VerticalAlignment="Center" FontSize="14" Theme="{DynamicResource BodyStrongTextBlockTheme}" 
                                                Classes.uninstalled="{Binding !IsInstalled}"/>
@@ -87,7 +97,7 @@
             <Grid Grid.Column="1" RowDefinitions="Auto, *, Auto" IsVisible="{Binding SelectedGame, Converter={x:Static conv:ObjectConverters.IsNotNull}}">
                 
                 <!-- Top Banner -->
-                <Border Grid.Row="0" Height="250" Background="#333333" Margin="20" CornerRadius="8" ClipToBounds="True">
+                <Border Grid.Row="0" Height="300" Background="#333333" Margin="20" CornerRadius="8" ClipToBounds="True">
                     <Grid>
                         <!-- Fallback Title (Visible if Image fails or is transparent) -->
                         <TextBlock Text="{Binding SelectedGame.Name}" 
@@ -96,49 +106,63 @@
                                    TextWrapping="Wrap"/>
 
                         <!-- Banner Image -->
-                        <Image Source="{Binding SelectedGame.BannerPath}" Stretch="UniformToFill" />
+                        <Image Source="{Binding SelectedGame.BannerImage}" Stretch="UniformToFill" />
 
-                        <!-- Overlay Gradient for text readability -->
-                        <Border Background="#99000000" VerticalAlignment="Bottom" Height="80"/>
+                        <!-- Overlay Gradient for text readability and Content -->
+                        <Border Background="#B3000000" VerticalAlignment="Bottom" MaxHeight="105">
+                            <Grid Margin="20,10" ColumnDefinitions="*, Auto">
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <!-- Logo Image (if available) -->
+                                    <Image Source="{Binding SelectedGame.LogoImage}" 
+                                           MaxHeight="85" 
+                                           HorizontalAlignment="Left"
+                                           IsVisible="{Binding SelectedGame.LogoImage, Converter={x:Static conv:ObjectConverters.IsNotNull}}"
+                                           Effect="{Binding SelectedGame.LogoShadowEffect}">
+                                    </Image>
+                                    
+                                    <!-- Fallback to text title if no logo -->
+                                    <TextBlock Text="{Binding SelectedGame.Name}" 
+                                               FontSize="32" FontWeight="Bold" 
+                                               Foreground="White"
+                                               IsVisible="{Binding SelectedGame.LogoImage, Converter={x:Static conv:ObjectConverters.IsNull}}">
+                                        <TextBlock.Effect>
+                                            <DropShadowEffect Color="Black" BlurRadius="10" Opacity="1"/>
+                                        </TextBlock.Effect>
+                                    </TextBlock>
+                                </StackPanel>
 
-                        <Grid VerticalAlignment="Bottom" Margin="20" ColumnDefinitions="*, Auto">
-                            <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
-                                 <TextBlock Text="{Binding SelectedGame.Name}" 
-                                       FontSize="32" FontWeight="Bold" 
-                                       Foreground="White" Effect="drop-shadow(0 0 10 black)"/>
-                            </StackPanel>
-
-                            <!-- Split Button for Start/Mod Selection -->
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
-                                <Button Classes="primary" Command="{Binding StartGameCommand}"
-                                        Background="#007acc" Foreground="White"
-                                        BorderThickness="0" CornerRadius="4,0,0,4"
-                                        Padding="20,10" FontWeight="Bold">
-                                    <StackPanel Orientation="Horizontal" Spacing="10">
-                                        <TextBlock Text="{Binding Localization[Start]}"/>
-                                        <TextBlock Text="{Binding SelectedMod, StringFormat='({0})'}" 
-                                                   Opacity="0.8" FontSize="10" VerticalAlignment="Center"
-                                                   IsVisible="{Binding SelectedMod, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Classes="secondary" Background="#0063a5" Foreground="White"
-                                        BorderThickness="0" CornerRadius="0,4,4,0"
-                                        Padding="10,10">
-                                    <Button.Flyout>
-                                        <MenuFlyout ItemsSource="{Binding SelectedGame.SupportedMods}">
-                                            <MenuFlyout.ItemContainerTheme>
-                                                <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-                                                    <Setter Property="Command" Value="{Binding #Root.((vm:MainViewModel)DataContext).SelectModCommand}" />
-                                                    <Setter Property="CommandParameter" Value="{Binding .}" />
-                                                    <Setter Property="Header" Value="{Binding .}" />
-                                                </ControlTheme>
-                                            </MenuFlyout.ItemContainerTheme>
-                                        </MenuFlyout>
-                                    </Button.Flyout>
-                                    <TextBlock Text="▼" FontSize="10"/>
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                                <!-- Split Button for Start/Mod Selection -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button Classes="primary" Command="{Binding StartGameCommand}"
+                                            Background="#007acc" Foreground="White"
+                                            BorderThickness="0" CornerRadius="4,0,0,4"
+                                            Padding="20,10" FontWeight="Bold">
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="{Binding Localization[Start]}"/>
+                                            <TextBlock Text="{Binding SelectedMod, StringFormat='({0})'}" 
+                                                       Opacity="0.8" FontSize="10" VerticalAlignment="Center"
+                                                       IsVisible="{Binding SelectedMod, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Classes="secondary" Background="#0063a5" Foreground="White"
+                                            BorderThickness="0" CornerRadius="0,4,4,0"
+                                            Padding="10,10">
+                                        <Button.Flyout>
+                                            <MenuFlyout ItemsSource="{Binding SelectedGame.SupportedMods}">
+                                                <MenuFlyout.ItemContainerTheme>
+                                                    <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+                                                        <Setter Property="Command" Value="{Binding #Root.((vm:MainViewModel)DataContext).SelectModCommand}" />
+                                                        <Setter Property="CommandParameter" Value="{Binding .}" />
+                                                        <Setter Property="Header" Value="{Binding .}" />
+                                                    </ControlTheme>
+                                                </MenuFlyout.ItemContainerTheme>
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                        <TextBlock Text="▼" FontSize="10"/>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
                     </Grid>
                 </Border>
 
