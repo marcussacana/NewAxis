@@ -43,7 +43,6 @@ namespace NewAxis.Services
 
             try
             {
-                // Extract entire archive
                 Console.WriteLine("[Migoto] Extracting archive...");
                 using (var archive = ArchiveFactory.Open(migoto7zPath))
                 {
@@ -67,7 +66,7 @@ namespace NewAxis.Services
                     }
                 }
 
-                // Look for JSON instructions file
+
                 var jsonInstructionsPath = Directory.GetFiles(sourceSubDir, "*.json", SearchOption.TopDirectoryOnly)
                     .FirstOrDefault();
 
@@ -77,19 +76,19 @@ namespace NewAxis.Services
                 {
                     Console.WriteLine("[Migoto] Found architecture-specific subdirectories (x64/x32)");
 
-                    // Find the target executable
+
                     var executablePath = Directory.GetFiles(targetDirectory, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
                     if (executablePath is null || !File.Exists(executablePath))
                     {
                         throw new FileNotFoundException($"Target executable not found in: {targetDirectory}");
                     }
 
-                    // Detect executable architecture
+
                     var is64Bit = Is64bitExecutable(executablePath);
                     var archSubDir = is64Bit ? "x64" : "x32";
                     Console.WriteLine($"[Migoto] Detected {(is64Bit ? "64-bit" : "32-bit")} executable, using {archSubDir} subdirectory");
 
-                    // Find the matching subdirectory
+
                     sourceSubDir = subDir.FirstOrDefault(x => string.Equals(Path.GetFileName(x), archSubDir, StringComparison.OrdinalIgnoreCase));
 
                     if (sourceSubDir == null)
@@ -105,7 +104,7 @@ namespace NewAxis.Services
                 }
                 else
                 {
-                    // No JSON instructions, just copy all files
+
                     Console.WriteLine("[Migoto] No JSON instructions found, copying all files...");
                     installedFiles = await CopyAllFilesAsync(sourceSubDir, targetDirectory);
                 }
@@ -128,7 +127,7 @@ namespace NewAxis.Services
             }
             finally
             {
-                // Cleanup temp directory
+
                 try
                 {
                     if (Directory.Exists(tempExtractDir))
@@ -203,7 +202,7 @@ namespace NewAxis.Services
                     continue;
                 }
 
-                // Handle multiple target names for the same source file
+
                 var targetNames = new List<string>();
                 if (!string.IsNullOrEmpty(fileInstruction.Target))
                 {
@@ -214,18 +213,18 @@ namespace NewAxis.Services
                     targetNames.AddRange(fileInstruction.AdditionalTargets);
                 }
 
-                // If no targets specified, use source filename
+
                 if (targetNames.Count == 0)
                 {
                     targetNames.Add(Path.GetFileName(fileInstruction.Source));
                 }
 
-                // Copy file to each target name
+
                 foreach (var targetName in targetNames)
                 {
                     var targetPath = Path.Combine(targetDirectory, targetName);
 
-                    // Create backup if file exists (never overwrite .disabled backups)
+
                     if (File.Exists(targetPath))
                     {
                         var backupPath = targetPath + ".disabled";
@@ -264,7 +263,7 @@ namespace NewAxis.Services
                     Directory.CreateDirectory(dir);
                 }
 
-                // Create backup if file exists (never overwrite .disabled backups)
+
                 if (File.Exists(targetPath))
                 {
                     var backupPath = targetPath + ".disabled";
@@ -298,23 +297,21 @@ namespace NewAxis.Services
                 using (var stream = new FileStream(executablePath, FileMode.Open, FileAccess.Read))
                 using (var reader = new BinaryReader(stream))
                 {
-                    // Read DOS header
-                    stream.Seek(0x3C, SeekOrigin.Begin); // Offset to PE header pointer
+                    stream.Seek(0x3C, SeekOrigin.Begin);
                     var peHeaderOffset = reader.ReadInt32();
 
-                    // Read PE header
+
                     stream.Seek(peHeaderOffset, SeekOrigin.Begin);
                     var peSignature = reader.ReadUInt32();
 
-                    if (peSignature != 0x00004550) // "PE\0\0"
+                    if (peSignature != 0x00004550)
                     {
                         throw new InvalidDataException("Invalid PE signature");
                     }
 
-                    // Read machine type (2 bytes after PE signature)
+
                     var machineType = reader.ReadUInt16();
 
-                    // 0x014c = x86 (32-bit), 0x8664 = x64 (64-bit)
                     return machineType == 0x8664;
                 }
 

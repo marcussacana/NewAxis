@@ -28,5 +28,7 @@
     "SelectGamePrompt": "Selecciona un juego para comenzar",
     "DownloadingData": "Descargando Datos",
     "PreparingData": "Preparando",
-    "RestoringData": "Restaurando Datos"
+    "RestoringData": "Restaurando Datos",
+    "ConnectionError": "Error de Conexión",
+    "DisableDLSS": "Desactivar DLSS"
 }

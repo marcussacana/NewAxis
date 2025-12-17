@@ -28,5 +28,7 @@
     "SelectGamePrompt": "開始するにはゲームを選択してください",
     "DownloadingData": "データをダウンロード中",
     "PreparingData": "準備中",
-    "RestoringData": "データを復元中"
+    "RestoringData": "データを復元中",
+    "ConnectionError": "接続エラー",
+    "DisableDLSS": "DLSSを無効にする"
 }
