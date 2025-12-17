@@ -14,7 +14,7 @@ namespace NewAxis.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
-    public const string REPO_BASE = "https://github.com/marcussacana/NewAxisData/blob/master/";
+    public const string REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
     public LocalizationService Localization => LocalizationService.Instance;
 
     public ObservableCollection<Game> Games { get; } = new();
