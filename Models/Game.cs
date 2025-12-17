@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NewAxis.Models;
 
@@ -104,18 +105,31 @@ public class Game : INotifyPropertyChanged
 
     public bool IsInstalled => !string.IsNullOrEmpty(InstallPath);
 
-    public List<string> SupportedMods { get; set; } = new();
+    private List<ModType> _supportedModTypes = new();
+    public List<ModType> SupportedModTypes
+    {
+        get => _supportedModTypes;
+        set
+        {
+            _supportedModTypes = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SupportedMods));
+        }
+    }
+
+    // Adapter for UI binding (read-only view)
+    public List<string> SupportedMods => SupportedModTypes.Select(type => type.GetDescription()).ToList();
 
     // Stores additional metadata (GameIndexEntry)
     public object? Tag { get; set; }
 
     public string Initials => Name.Length > 0 ? Name.Substring(0, 1) : "?";
 
-    public Game(string name, string installPath, List<string> mods)
+    public Game(string name, string installPath, List<ModType> mods)
     {
         Name = name;
         InstallPath = installPath;
-        SupportedMods = mods;
+        SupportedModTypes = mods;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

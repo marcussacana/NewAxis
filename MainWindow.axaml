@@ -282,6 +282,11 @@
                              <Button Classes="resetBtn" Command="{Binding ResetDefaultsCommand}" Content="{Binding Localization[ResetDefaults]}" Background="Transparent" BorderBrush="#666666" BorderThickness="1" Foreground="#cccccc"/>
                              <Button Grid.Column="1" Command="{Binding ApplySettingsCommand}" Content="{Binding Localization[Apply]}" HorizontalAlignment="Right" Classes="primary" Background="#007acc" Foreground="White" Padding="20,5"/>
                         </Grid>
+
+                        <TextBlock Text="NewAxis Project - By Marcussacana" 
+                                   HorizontalAlignment="Center" 
+                                   Foreground="White"
+                                   FontSize="12"/>
                         
                     </StackPanel>
                 </Border>

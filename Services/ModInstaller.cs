@@ -5,12 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using NewAxis.Models;
 
 namespace NewAxis.Services
 {
-    /// <summary>
-    /// Handles mod installation and cleanup
-    /// </summary>
     public class ModInstallationSettings
     {
         public double Depth { get; set; }
@@ -29,9 +27,6 @@ namespace NewAxis.Services
         public Avalonia.Input.KeyModifiers Modifiers { get; set; }
     }
 
-    /// <summary>
-    /// Handles mod installation and cleanup
-    /// </summary>
     public class ModInstaller
     {
         private const string MOD_FILES_LIST = "3dfiles.txt";
@@ -41,7 +36,7 @@ namespace NewAxis.Services
 
         public static async Task<List<string>> InstallModAsync(
             Models.Game game,
-            string modType,
+            NewAxis.Models.ModType modType,
             GameRepositoryClient repoClient,
             ModInstallationSettings settings)
         {
@@ -60,12 +55,22 @@ namespace NewAxis.Services
             var relativeExecutablePath = gameEntry.RelativeExecutablePath ?? "";
             var targetDirectory = Path.Combine(gameInstallPath, relativeExecutablePath);
 
-            Console.WriteLine($"[ModInstaller] Installing {modType} mod for {game.Name}...");
+            Console.WriteLine($"[ModInstaller] Installing {modType.GetDescription()} mod for {game.Name}...");
 
             try
             {
+                // TODO: Implement Recommended Settings
+                /*
+                if (!string.IsNullOrEmpty(gameEntry.ConfigArchivePath))
+                {
+                    Console.WriteLine("[ModInstaller] Found ConfigArchive, installing...");
+                    var configLocalPath = await DownloadFileAsync(repoClient, gameEntry.ConfigArchivePath);
+                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory);
+                    installedFiles.AddRange(configFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
+                }
+                */
 
-                if (modType == "3D+")
+                if (modType == ModType.ThreeDPlus)
                 {
                     // Install Reshade
                     if (string.IsNullOrEmpty(gameEntry.ReshadePath) || string.IsNullOrEmpty(gameEntry.TargetDllFileName))
@@ -82,16 +87,18 @@ namespace NewAxis.Services
                         overwatchLocalPath = await DownloadFileAsync(repoClient, gameEntry.OverwatchPath);
                     }
 
-                    var reshadeFiles = await ReshadeExtractor.ExtractReshadeAsync(
-                        reshadeLocalPath,
-                        targetDirectory,
-                        executablePath,
-                        gameEntry,
-                        overwatchLocalPath);
+                    var reshadeFiles = await ReshadeExtractor.ExtractReshadeAsync(new ReshadeExtractionContext
+                    {
+                        Reshade7zPath = reshadeLocalPath,
+                        TargetDirectory = targetDirectory,
+                        ExecutablePath = executablePath,
+                        GameEntry = gameEntry,
+                        OverwatchPath = overwatchLocalPath
+                    });
 
                     installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
-                else if (modType == "3D Ultra")
+                else if (modType == ModType.ThreeDUltra)
                 {
                     // Install Migoto and Shaders
                     if (string.IsNullOrEmpty(gameEntry.MigotoPath))

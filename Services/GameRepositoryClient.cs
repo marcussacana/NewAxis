@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace NewAxis.Services
 {
@@ -55,7 +55,7 @@ namespace NewAxis.Services
                 json = await _httpClient!.GetStringAsync(indexUrl);
             }
 
-            return JsonConvert.DeserializeObject<GameIndex>(json)!;
+            return JsonSerializer.Deserialize(json, AppJsonContext.Default.GameIndex)!;
         }
 
         public async Task<byte[]> DownloadImageAsync(string urlOrPath)
@@ -205,7 +205,7 @@ namespace NewAxis.Services
         public long? DepthCopyBeforeClears { get; set; }
 
         public ImageUrls? Images { get; set; }
-        public FileUrls? Files { get; set; }
+        public string? ConfigArchivePath { get; set; }
     }
 
     public class ImageUrls

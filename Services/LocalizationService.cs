@@ -74,7 +74,7 @@ public class LocalizationService : INotifyPropertyChanged
                 {
                     var code = Path.GetFileNameWithoutExtension(file);
                     var json = File.ReadAllText(file);
-                    var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    var dict = JsonSerializer.Deserialize(json, AppJsonContext.Default.DictionaryStringString);
 
                     if (dict != null)
                     {

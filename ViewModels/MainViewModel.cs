@@ -36,10 +36,8 @@ public class MainViewModel : ViewModelBase
                     SelectedMod = _selectedGame.SupportedMods[0];
                 }
 
-                // Carrega banner automaticamente
                 _ = LoadGameBannerAsync(_selectedGame);
 
-                // Carrega config do jogo (truegame.ini)
                 LoadGameConfig(_selectedGame);
             }
         }
@@ -430,18 +428,18 @@ public class MainViewModel : ViewModelBase
             {
                 foreach (var gameEntry in index.Games)
                 {
-                    var mods = new List<string>();
+                    var mods = new List<ModType>();
 
                     // Detect 3D Ultra mod (requires both ShaderMod and MigotoPath)
                     if (!string.IsNullOrEmpty(gameEntry.ShaderMod) && !string.IsNullOrEmpty(gameEntry.MigotoPath))
                     {
-                        mods.Add("3D Ultra");
+                        mods.Add(ModType.ThreeDUltra);
                     }
 
                     // Detect 3D+ mod (requires ReshadePath)
                     if (!string.IsNullOrEmpty(gameEntry.ReshadePath))
                     {
-                        mods.Add("3D+");
+                        mods.Add(ModType.ThreeDPlus);
                     }
 
                     var game = new Game(
@@ -702,11 +700,18 @@ public class MainViewModel : ViewModelBase
                     PopoutDec = new HotkeyDefinition { Key = KeyPopoutDec, Modifiers = ModPopoutDec }
                 };
 
-                await ModInstaller.InstallModAsync(
-                    SelectedGame,
-                    SelectedMod,
-                    _repoClient,
-                    settings);
+                if (NewAxis.Models.ModTypeExtensions.FromDescription(SelectedMod) is ModType modType)
+                {
+                    await ModInstaller.InstallModAsync(
+                        SelectedGame,
+                        modType,
+                        _repoClient,
+                        settings);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"Unknown mod type selected: {SelectedMod}");
+                }
             }
 
             // Sync truegame.ini configuration

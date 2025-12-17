@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.OpenGL;
-using Newtonsoft.Json;
 using SharpCompress.Archives;
 using SharpCompress.Common;
 using SixLabors.ImageSharp;
@@ -176,7 +176,7 @@ namespace NewAxis.Services
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
-            var instructions = JsonConvert.DeserializeObject<MigotoInstructions>(jsonContent);
+            var instructions = JsonSerializer.Deserialize(jsonContent, AppJsonContext.Default.MigotoInstructions);
 
             if (instructions?.Files == null || instructions.Files.Count == 0)
             {
