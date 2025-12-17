@@ -244,20 +244,98 @@ namespace NewAxis.Services
             var tempDir = Path.Combine(Path.GetTempPath(), "NewAxisMods");
             Directory.CreateDirectory(tempDir);
 
-            var cachePath = Path.Combine(tempDir, Path.GetFileName(urlOrPath));
+            // Check if this is a split file pattern (matches .001-XXX)
+            var match = System.Text.RegularExpressions.Regex.Match(urlOrPath, @"^(.*)\.(\d{3})-(\d{3})$");
 
-            // Download if not already cached
-            if (!File.Exists(cachePath))
+            if (match.Success)
             {
-                Console.WriteLine($"[ModInstaller] Downloading: {urlOrPath}");
-                await repoClient.DownloadFileAsync(urlOrPath, cachePath);
+                var basePath = match.Groups[1].Value;
+                var startPart = int.Parse(match.Groups[2].Value); // Should be 1
+                var totalParts = int.Parse(match.Groups[3].Value);
+
+                var finalFileName = Path.GetFileName(basePath);
+                var mergePath = Path.Combine(tempDir, finalFileName);
+
+                // If merged file already exists, return it? 
+                // Careful: partial downloads or updates. For now assuming if it exists it's good, or we can check simple validity.
+                // Re-merging is safer if we want to guarantee integrity, or check if parts exist.
+
+                // Let's check if we have all parts cached
+                bool allPartsCached = true;
+                for (int i = 1; i <= totalParts; i++)
+                {
+                    var partUrl = $"{basePath}.{i:D3}-{totalParts:D3}";
+                    var partCacheName = Path.GetFileName(partUrl);
+                    var partCachePath = Path.Combine(tempDir, partCacheName);
+                    if (!File.Exists(partCachePath))
+                    {
+                        allPartsCached = false;
+                        break;
+                    }
+                }
+
+                if (File.Exists(mergePath) && allPartsCached)
+                {
+                    Console.WriteLine($"[ModInstaller] Using cached merged file: {finalFileName}");
+                    return mergePath;
+                }
+
+                Console.WriteLine($"[ModInstaller] Detected split file ({totalParts} parts). Downloading...");
+
+                // Download parts
+                for (int i = 1; i <= totalParts; i++)
+                {
+                    var partUrl = $"{basePath}.{i:D3}-{totalParts:D3}";
+                    var partCacheName = Path.GetFileName(partUrl);
+                    var partCachePath = Path.Combine(tempDir, partCacheName);
+
+                    if (!File.Exists(partCachePath))
+                    {
+                        Console.WriteLine($"  - Downloading part {i}/{totalParts}: {partCacheName}");
+                        await repoClient.DownloadFileAsync(partUrl, partCachePath);
+                    }
+                }
+
+                // Merge parts
+                Console.WriteLine($"[ModInstaller] Merging {totalParts} parts...");
+                if (File.Exists(mergePath)) File.Delete(mergePath);
+
+                using (var destStream = new FileStream(mergePath, FileMode.Create, FileAccess.Write))
+                {
+                    for (int i = 1; i <= totalParts; i++)
+                    {
+                        var partUrl = $"{basePath}.{i:D3}-{totalParts:D3}";
+                        var partCacheName = Path.GetFileName(partUrl);
+                        var partCachePath = Path.Combine(tempDir, partCacheName);
+
+                        using (var srcStream = new FileStream(partCachePath, FileMode.Open, FileAccess.Read))
+                        {
+                            await srcStream.CopyToAsync(destStream);
+                        }
+                    }
+                }
+
+                Console.WriteLine($"[ModInstaller] Merge complete: {mergePath}");
+                return mergePath;
             }
             else
             {
-                Console.WriteLine($"[ModInstaller] Using cached: {Path.GetFileName(urlOrPath)}");
-            }
+                // Regular single file download
+                var cachePath = Path.Combine(tempDir, Path.GetFileName(urlOrPath));
 
-            return cachePath;
+                // Download if not already cached
+                if (!File.Exists(cachePath))
+                {
+                    Console.WriteLine($"[ModInstaller] Downloading: {urlOrPath}");
+                    await repoClient.DownloadFileAsync(urlOrPath, cachePath);
+                }
+                else
+                {
+                    Console.WriteLine($"[ModInstaller] Using cached: {Path.GetFileName(urlOrPath)}");
+                }
+
+                return cachePath;
+            }
         }
 
         /// <summary>

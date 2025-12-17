@@ -136,7 +136,7 @@
                                     <Button Classes="primary" Command="{Binding StartGameCommand}"
                                             Background="#007acc" Foreground="White"
                                             BorderThickness="0" CornerRadius="4,0,0,4"
-                                            Padding="20,10" FontWeight="Bold">
+                                            Padding="20,10" FontWeight="Bold" Name="StartButton">
                                         <StackPanel Orientation="Horizontal" Spacing="10">
                                             <TextBlock Text="{Binding Localization[Start]}"/>
                                             <TextBlock Text="{Binding SelectedMod, StringFormat='({0})'}" 
@@ -162,6 +162,21 @@
                                     </Button>
                                 </StackPanel>
                             </Grid>
+                        </Border>
+
+                        <!-- Update Overlay -->
+                        <Border Grid.RowSpan="2" Background="#AA000000" IsVisible="{Binding ShowUpdatePrompt}">
+                             <Border Background="{DynamicResource SolidBackgroundFillColorBase}" CornerRadius="8" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300">
+                                 <StackPanel Spacing="15">
+                                     <TextBlock Text="{Binding Localization[UpdateAvailable]}" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                                     <TextBlock Text="{Binding Localization[UpdatePromptMessage]}" TextWrapping="Wrap"  Foreground="#CCCCCC" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                     
+                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20">
+                                         <Button Command="{Binding AcceptUpdateCommand}" Content="{Binding Localization[Yes]}" Classes="primary" Padding="20,8"/>
+                                         <Button Command="{Binding DeclineUpdateCommand}" Content="{Binding Localization[No]}" Padding="20,8"/>
+                                     </StackPanel>
+                                 </StackPanel>
+                             </Border>
                         </Border>
                     </Grid>
                 </Border>
@@ -288,6 +303,43 @@
                                    Foreground="White"
                                    FontSize="12"/>
                         
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Progress Overlay (Fullscreen) -->
+            <Grid Grid.ColumnSpan="2" Background="#CC000000" IsVisible="{Binding IsProgressOverlayVisible}" ZIndex="1000">
+                <Border Background="#252526" BorderBrush="#007acc" BorderThickness="2" 
+                        CornerRadius="8" Padding="40,30" 
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        MinWidth="300" BoxShadow="0 10 30 0 Black">
+                    <StackPanel Spacing="20" HorizontalAlignment="Center">
+                        <!-- Loading Animation -->
+                        <Border Width="60" Height="60" CornerRadius="30" 
+                                BorderBrush="#007acc" BorderThickness="4"
+                                HorizontalAlignment="Center">
+                            <Border.Styles>
+                                <Style Selector="Border">
+                                    <Style.Animations>
+                                        <Animation Duration="0:0:1" IterationCount="Infinite" PlaybackDirection="Alternate">
+                                            <KeyFrame Cue="0%">
+                                                <Setter Property="Opacity" Value="0.3"/>
+                                            </KeyFrame>
+                                            <KeyFrame Cue="100%">
+                                                <Setter Property="Opacity" Value="1.0"/>
+                                            </KeyFrame>
+                                        </Animation>
+                                    </Style.Animations>
+                                </Style>
+                            </Border.Styles>
+                        </Border>
+                        
+                        <!-- Progress Message -->
+                        <TextBlock Text="{Binding ProgressOverlayMessage}" 
+                                   FontSize="20" FontWeight="SemiBold" 
+                                   Foreground="White"
+                                   HorizontalAlignment="Center"
+                                   TextAlignment="Center"/>
                     </StackPanel>
                 </Border>
             </Grid>

@@ -1,4 +1,8 @@
 {
+    "UpdateAvailable": "Nueva Versión Disponible",
+    "UpdatePromptMessage": "Una nueva versión de NewAxis está disponible. ¿Desea actualizar ahora?",
+    "Yes": "Sí",
+    "No": "No",
     "Start": "Jugar",
     "Depth": "Profundidad",
     "Popout": "Popout",
@@ -21,5 +25,8 @@
     "RemoveGame": "Eliminar de la Lista",
     "ToggleUninstalled": "Alternar Juegos Desinstalados",
     "OpenSettings": "Ajustes",
-    "SelectGamePrompt": "Selecciona un juego para comenzar"
+    "SelectGamePrompt": "Selecciona un juego para comenzar",
+    "DownloadingData": "Descargando Datos",
+    "PreparingData": "Preparando",
+    "RestoringData": "Restaurando Datos"
 }

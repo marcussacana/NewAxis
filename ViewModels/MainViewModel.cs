@@ -6,12 +6,9 @@ using Avalonia.Input;
 using NewAxis.Models;
 using NewAxis.Services;
 using System;
-using Avalonia.Controls;
 using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Advanced;
 using System.Threading.Tasks;
 using System.Diagnostics;
-using Avalonia.Controls.Shapes;
 
 namespace NewAxis.ViewModels;
 
@@ -43,7 +40,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    private async System.Threading.Tasks.Task LoadGameBannerAsync(Game? game)
+    private async Task LoadGameBannerAsync(Game? game)
     {
         if (game == null || _repoClient == null) return;
 
@@ -55,30 +52,30 @@ public class MainViewModel : ViewModelBase
                 // Carrega Banner (Wallpaper)
                 if (!string.IsNullOrEmpty(indexEntry.Images.Wallpaper))
                 {
-                    System.Diagnostics.Debug.WriteLine($"Downloading banner for {game.Name}");
+                    Debug.WriteLine($"Downloading banner for {game.Name}");
                     game.BannerImage = await LoadImageAsync(indexEntry.Images.Wallpaper);
                 }
 
                 // Carrega Logo
                 if (!string.IsNullOrEmpty(indexEntry.Images.Logo))
                 {
-                    System.Diagnostics.Debug.WriteLine($"Downloading logo for {game.Name}");
+                    Debug.WriteLine($"Downloading logo for {game.Name}");
                     var logoImg = await LoadImageAsync(indexEntry.Images.Logo, autoCropTransparency: true, gameInstance: game);
                     game.LogoImage = logoImg;
                 }
 
                 // Icon is now eager-loaded in RefreshGamesList via LoadGameIconAsync
 
-                System.Diagnostics.Debug.WriteLine($"Images loaded for {game.Name}");
+                Debug.WriteLine($"Images loaded for {game.Name}");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error loading images: {ex.Message}");
+            Debug.WriteLine($"Error loading images: {ex.Message}");
         }
     }
 
-    private async System.Threading.Tasks.Task<Avalonia.Media.Imaging.Bitmap?> LoadImageAsync(string url, bool autoCropTransparency = false, Game? gameInstance = null)
+    private async Task<Avalonia.Media.Imaging.Bitmap?> LoadImageAsync(string url, bool autoCropTransparency = false, Game? gameInstance = null)
     {
         try
         {
@@ -86,7 +83,7 @@ public class MainViewModel : ViewModelBase
             var imageBytes = await _repoClient!.DownloadImageAsync(url);
 
             // Offload CPU-intensive image operations to a background thread
-            return await System.Threading.Tasks.Task.Run(() =>
+            return await Task.Run(() =>
             {
                 using (var inputStream = new System.IO.MemoryStream(imageBytes))
                 using (var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(inputStream))
@@ -119,7 +116,7 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error loading image from {url}: {ex.Message}");
+            Debug.WriteLine($"Error loading image from {url}: {ex.Message}");
             return null;
         }
     }
@@ -183,14 +180,14 @@ public class MainViewModel : ViewModelBase
                 {
                     var cropRect = new SixLabors.ImageSharp.Rectangle(0, top, width, newHeight);
                     rgba32Image.Mutate(x => x.Crop(cropRect));
-                    System.Diagnostics.Debug.WriteLine($"Logo cropped: removed {top}px top, {height - bottom - 1}px bottom");
+                    Debug.WriteLine($"Logo cropped: removed {top}px top, {height - bottom - 1}px bottom");
                 }
 
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error autocropping transparency: {ex.Message}");
+            Debug.WriteLine($"Error autocropping transparency: {ex.Message}");
         }
     }
 
@@ -201,7 +198,7 @@ public class MainViewModel : ViewModelBase
             var rgba32Image = image as SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>;
             if (rgba32Image == null)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to analyze image brightness: Image is null");
+                Debug.WriteLine("Failed to analyze image brightness: Image is null");
                 return;
             }
 
@@ -252,7 +249,7 @@ public class MainViewModel : ViewModelBase
                                 OffsetY = 0
                             };
                         });
-                        System.Diagnostics.Debug.WriteLine($"Logo analyzed as DARK (Ratio: {darkRatio:P1}). Shadow set to White.");
+                        Debug.WriteLine($"Logo analyzed as DARK (Ratio: {darkRatio:P1}). Shadow set to White.");
                     }
                     else
                     {
@@ -267,14 +264,14 @@ public class MainViewModel : ViewModelBase
                                 OffsetY = 0
                             };
                         });
-                        System.Diagnostics.Debug.WriteLine($"Logo analyzed as BRITE (Ratio: {1 - darkRatio:P1}). Shadow set to Black.");
+                        Debug.WriteLine($"Logo analyzed as BRITE (Ratio: {1 - darkRatio:P1}). Shadow set to Black.");
                     }
                 }
             });
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error analyzing brightness: {ex.Message}");
+            Debug.WriteLine($"Error analyzing brightness: {ex.Message}");
         }
     }
 
@@ -320,6 +317,20 @@ public class MainViewModel : ViewModelBase
     {
         get => _showUninstalledGames;
         set => SetField(ref _showUninstalledGames, value);
+    }
+
+    private bool _isProgressOverlayVisible;
+    public bool IsProgressOverlayVisible
+    {
+        get => _isProgressOverlayVisible;
+        set => SetField(ref _isProgressOverlayVisible, value);
+    }
+
+    private string _progressOverlayMessage = string.Empty;
+    public string ProgressOverlayMessage
+    {
+        get => _progressOverlayMessage;
+        set => SetField(ref _progressOverlayMessage, value);
     }
 
     private bool _installModTemporarily = true;
@@ -411,6 +422,64 @@ public class MainViewModel : ViewModelBase
         ToggleHiddenGamesCommand = new RelayCommand(ExecuteToggleHiddenGames);
         ApplySettingsCommand = new RelayCommand(ExecuteApplySettings);
         ResetDefaultsCommand = new RelayCommand(ExecuteResetDefaults);
+
+        AcceptUpdateCommand = new RelayCommand(ExecuteAcceptUpdate);
+        DeclineUpdateCommand = new RelayCommand(_ => ShowUpdatePrompt = false);
+
+        CheckForUpdates();
+    }
+
+    private async void CheckForUpdates()
+    {
+        try
+        {
+            if (_repoClient == null) _repoClient = new GameRepositoryClient(REPO_BASE);
+
+            var checker = new UpdateChecker(_repoClient);
+            var info = await checker.CheckForUpdatesAsync();
+
+            if (info != null && info.Version > Program.CurrentVersion)
+            {
+                PendingUpdateUrl = info.DownloadUrl;
+                ShowUpdatePrompt = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Update check error: {ex.Message}");
+        }
+    }
+
+    private string? PendingUpdateUrl { get; set; }
+
+    private bool _showUpdatePrompt;
+    public bool ShowUpdatePrompt
+    {
+        get => _showUpdatePrompt;
+        set => SetField(ref _showUpdatePrompt, value);
+    }
+
+    public ICommand AcceptUpdateCommand { get; }
+    public ICommand DeclineUpdateCommand { get; }
+
+    private async void ExecuteAcceptUpdate(object? obj)
+    {
+        if (string.IsNullOrEmpty(PendingUpdateUrl)) return;
+
+        ShowUpdatePrompt = false; // Hide prompt while updating? Or show status?
+                                  // Maybe we should show a busy indicator but for now let's just do it.
+                                  // Or update the prompt to say "Updating..."
+
+        try
+        {
+            if (_repoClient == null) _repoClient = new GameRepositoryClient(REPO_BASE);
+            await UpdateManager.PerformUpdateAsync(PendingUpdateUrl, _repoClient);
+        }
+        catch (Exception ex)
+        {
+            // Show error? For now just log.
+            Debug.WriteLine($"Update failed: {ex.Message}");
+        }
     }
 
     private async Task LoadGamesFromRepositoryAsync()
@@ -587,7 +656,7 @@ public class MainViewModel : ViewModelBase
 
     private List<Game> _allGames;
 
-    private async System.Threading.Tasks.Task LoadGameIconAsync(Game game)
+    private async Task LoadGameIconAsync(Game game)
     {
         if (game == null || _repoClient == null || game.IconImage != null) return;
 
@@ -595,7 +664,7 @@ public class MainViewModel : ViewModelBase
         {
             if (game.Tag is GameIndexEntry indexEntry && !string.IsNullOrEmpty(indexEntry.Images?.Icon))
             {
-                // System.Diagnostics.Debug.WriteLine($"Downloading icon for {game.Name}");
+                // Debug.WriteLine($"Downloading icon for {game.Name}");
                 game.IconImage = await LoadImageAsync(indexEntry.Images.Icon);
             }
         }
@@ -672,13 +741,13 @@ public class MainViewModel : ViewModelBase
 
         if (SelectedGame == null || string.IsNullOrEmpty(SelectedGame.InstallPath))
         {
-            System.Diagnostics.Debug.WriteLine("No game selected or game not installed");
+            Debug.WriteLine("No game selected or game not installed");
             return;
         }
 
         if (!(SelectedGame.Tag is GameIndexEntry gameEntry))
         {
-            System.Diagnostics.Debug.WriteLine("Game metadata not available");
+            Debug.WriteLine("Game metadata not available");
             return;
         }
 
@@ -689,6 +758,13 @@ public class MainViewModel : ViewModelBase
             // Install mod if one is selected
             if (!string.IsNullOrEmpty(SelectedMod) && _repoClient != null)
             {
+                // Show "Downloading Data" overlay
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ProgressOverlayMessage = Localization["DownloadingData"];
+                    IsProgressOverlayVisible = true;
+                });
+
                 var settings = new ModInstallationSettings
                 {
                     Depth = Depth,
@@ -700,8 +776,14 @@ public class MainViewModel : ViewModelBase
                     PopoutDec = new HotkeyDefinition { Key = KeyPopoutDec, Modifiers = ModPopoutDec }
                 };
 
-                if (NewAxis.Models.ModTypeExtensions.FromDescription(SelectedMod) is ModType modType)
+                if (ModTypeExtensions.FromDescription(SelectedMod) is ModType modType)
                 {
+                    // Show "Preparing" overlay before installation
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        ProgressOverlayMessage = Localization["PreparingData"];
+                    });
+
                     await ModInstaller.InstallModAsync(
                         SelectedGame,
                         modType,
@@ -710,8 +792,14 @@ public class MainViewModel : ViewModelBase
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"Unknown mod type selected: {SelectedMod}");
+                    Debug.WriteLine($"Unknown mod type selected: {SelectedMod}");
                 }
+
+                // Hide overlay after installation
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    IsProgressOverlayVisible = false;
+                });
             }
 
             // Sync truegame.ini configuration
@@ -752,15 +840,33 @@ public class MainViewModel : ViewModelBase
                 // Uninstall mod if temporary installation is enabled
                 if (InstallModTemporarily && !string.IsNullOrEmpty(SelectedMod))
                 {
+                    // Show "Restoring Data" overlay
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        ProgressOverlayMessage = Localization["RestoringData"];
+                        IsProgressOverlayVisible = true;
+                    });
+
                     await Task.Delay(3000);
                     await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
                     Debug.WriteLine("Temporary mod uninstalled");
+
+                    // Hide overlay after uninstallation
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        IsProgressOverlayVisible = false;
+                    });
                 }
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Error starting game: {ex.Message}");
+            // Hide overlay on error
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                IsProgressOverlayVisible = false;
+            });
         }
         finally
         {

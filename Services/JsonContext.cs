@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace NewAxis.Services
 {
     [JsonSerializable(typeof(GameIndex))]
+    [JsonSerializable(typeof(UpdateInfo))]
     [JsonSerializable(typeof(GameIndexEntry))]
     [JsonSerializable(typeof(ImageUrls))]
     [JsonSerializable(typeof(FileUrls))]

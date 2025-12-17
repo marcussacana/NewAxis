@@ -1,4 +1,8 @@
 {
+    "UpdateAvailable": "新しいバージョンが利用可能です",
+    "UpdatePromptMessage": "NewAxisの新しいバージョンが利用可能です。今すぐ更新しますか？",
+    "Yes": "はい",
+    "No": "いいえ",
     "Start": "プレイ",
     "Depth": "奥行き",
     "Popout": "飛び出し",
@@ -21,5 +25,8 @@
     "RemoveGame": "リストから削除",
     "ToggleUninstalled": "未インストールのゲームを切り替え",
     "OpenSettings": "設定",
-    "SelectGamePrompt": "開始するにはゲームを選択してください"
+    "SelectGamePrompt": "開始するにはゲームを選択してください",
+    "DownloadingData": "データをダウンロード中",
+    "PreparingData": "準備中",
+    "RestoringData": "データを復元中"
 }
