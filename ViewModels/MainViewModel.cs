@@ -820,15 +820,12 @@ public class MainViewModel : ViewModelBase
 
                 await Task.Run(() => process.WaitForExit());
 
-                bool first = true;
-
                 var gameDir = SelectedGame.InstallPath;
                 var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
 
                 while (true)
                 {
-                    await Task.Delay(first ? 6000 : 3000);
-                    first = false;
+                    await Task.Delay(6000);
 
                     // Detect any running process from the game folder
                     var childs = allExes
