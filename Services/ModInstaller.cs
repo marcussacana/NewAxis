@@ -142,7 +142,15 @@ namespace NewAxis.Services
                     }
 
 
+
                     var d3dxContent = $"[Rendering]\r\nbase_path_override={targetDirectory}";
+
+                    if (!string.IsNullOrEmpty(gameEntry.D3DXSettings))
+                    {
+                        d3dxContent = gameEntry.D3DXSettings + "\r\n\r\n" + d3dxContent;
+                        Console.WriteLine($"[ModInstaller] Applied D3DXSettings override (Length: {gameEntry.D3DXSettings.Length})");
+                    }
+
                     await File.WriteAllTextAsync(d3dxPath, d3dxContent);
                     Console.WriteLine($"[ModInstaller] Generated d3dx.ini pointing to {targetDirectory}");
 

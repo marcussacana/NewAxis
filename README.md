@@ -1,6 +1,6 @@
 # NewAxis 3D Manager
 
-**NewAxis** is a free and open-source launcher and mod manager that brings **3D gaming** to LeiaSR-compatible monitors—without being locked into proprietary software!
+**NewAxis** is a free and open-source launcher and mod manager that brings **3D gaming** to LeiaSR-compatible monitors—without being locked into proprietary hardware!
 
 ## Supported Monitors
 
@@ -120,6 +120,10 @@ This project is open-source and available under the MIT License.
 **NewAxis Project** - By Marcussacana
 
 Special thanks to the 3D gaming community and all contributors who help expand game support!
+
+## Disclaimer:
+
+This project is independent and is not affiliated with, endorsed by, sponsored by, or otherwise associated with Acer Inc. All trademarks belong to their respective owners.
 
 ---
 

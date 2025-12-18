@@ -822,7 +822,7 @@ public class MainViewModel : ViewModelBase
 
                 bool first = true;
 
-                var gameDir = System.IO.Path.GetDirectoryName(SelectedGame.InstallPath);
+                var gameDir = SelectedGame.InstallPath;
                 var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
 
                 while (true)
@@ -835,7 +835,6 @@ public class MainViewModel : ViewModelBase
                         .Select(path => System.IO.Path.GetFileNameWithoutExtension(path))
                         .Where(name => !string.IsNullOrEmpty(name))
                         .SelectMany(name => Process.GetProcessesByName(name!))
-                        .Where(x => allExes.Contains(x.MainModule?.FileName ?? "", StringComparer.OrdinalIgnoreCase))
                         .ToList();
 
                     if (!childs.Any())

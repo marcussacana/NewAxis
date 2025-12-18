@@ -205,6 +205,7 @@ namespace NewAxis.Services
         public long? DepthCopyBeforeClears { get; set; }
         public string? SettingsPlus { get; set; }
         public string? SettingsUltra { get; set; }
+        public string? D3DXSettings { get; set; }
 
         public ImageUrls? Images { get; set; }
         public string? ConfigArchivePath { get; set; }
