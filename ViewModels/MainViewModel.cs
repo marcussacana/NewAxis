@@ -820,12 +820,29 @@ public class MainViewModel : ViewModelBase
 
                 await Task.Run(() => process.WaitForExit());
 
-                await Task.Delay(6000);
+                bool first = true;
 
-                var childs = Process.GetProcessesByName(System.IO.Path.GetFileNameWithoutExtension(exePath));
+                var gameDir = System.IO.Path.GetDirectoryName(SelectedGame.InstallPath);
+                var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
 
-                await Task.WhenAll(childs.Select(x => x.WaitForExitAsync()));
+                while (true)
+                {
+                    await Task.Delay(first ? 6000 : 3000);
+                    first = false;
 
+                    // Detect any running process from the game folder
+                    var childs = allExes
+                        .Select(path => System.IO.Path.GetFileNameWithoutExtension(path))
+                        .Where(name => !string.IsNullOrEmpty(name))
+                        .SelectMany(name => Process.GetProcessesByName(name!))
+                        .Where(x => allExes.Contains(x.MainModule?.FileName ?? "", StringComparer.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (!childs.Any())
+                        break;
+
+                    await Task.WhenAll(childs.Select(x => x.WaitForExitAsync()));
+                }
 
                 if (InstallModTemporarily && !string.IsNullOrEmpty(SelectedMod))
                 {
@@ -835,7 +852,6 @@ public class MainViewModel : ViewModelBase
                         IsProgressOverlayVisible = true;
                     });
 
-                    await Task.Delay(3000);
                     await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
                     Debug.WriteLine("Temporary mod uninstalled");
 

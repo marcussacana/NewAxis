@@ -22,6 +22,8 @@ namespace NewAxis.Services
     [JsonSerializable(typeof(List<AvailableSettingValue>))]
     [JsonSerializable(typeof(List<ConfigFilePath>))]
     [JsonSerializable(typeof(Dictionary<string, string>))]
+    [JsonSerializable(typeof(GameSettingOverride))]
+    [JsonSerializable(typeof(List<GameSettingOverride>))]
     public partial class AppJsonContext : JsonSerializerContext
     {
     }

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using NewAxis.Models;
 
@@ -58,16 +59,23 @@ namespace NewAxis.Services
 
             try
             {
-                // TODO: Implement Recommended Settings
-                /*
+                string? settingsJson = null;
+                if (modType == ModType.ThreeDPlus)
+                {
+                    settingsJson = gameEntry.SettingsPlus;
+                }
+                else if (modType == ModType.ThreeDUltra)
+                {
+                    settingsJson = gameEntry.SettingsUltra;
+                }
+
                 if (!string.IsNullOrEmpty(gameEntry.ConfigArchivePath))
                 {
-                    Console.WriteLine("[ModInstaller] Found ConfigArchive, installing...");
+                    Console.WriteLine($"[ModInstaller] Found ConfigArchive (Mode: {modType}), installing...");
                     var configLocalPath = await DownloadFileAsync(repoClient, gameEntry.ConfigArchivePath);
-                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory);
+                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson);
                     installedFiles.AddRange(configFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
-                */
 
                 if (modType == ModType.ThreeDPlus)
                 {
@@ -303,7 +311,11 @@ namespace NewAxis.Services
             else
             {
 
-                var cachePath = Path.Combine(tempDir, Path.GetFileName(urlOrPath));
+
+                // Use hash of URL to avoid collisions
+                var urlHash = ComputeHash(urlOrPath);
+                var fileName = Path.GetFileName(urlOrPath);
+                var cachePath = Path.Combine(tempDir, $"{urlHash}_{fileName}");
 
 
                 if (!File.Exists(cachePath))
@@ -317,6 +329,16 @@ namespace NewAxis.Services
                 }
 
                 return cachePath;
+            }
+        }
+
+        private static string ComputeHash(string input)
+        {
+            using (var md5 = MD5.Create())
+            {
+                var inputBytes = Encoding.UTF8.GetBytes(input);
+                var hashBytes = md5.ComputeHash(inputBytes);
+                return Convert.ToHexString(hashBytes).ToLower();
             }
         }
 

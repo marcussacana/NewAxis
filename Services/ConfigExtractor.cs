@@ -19,7 +19,8 @@ namespace NewAxis.Services
         /// </summary>
         public static async Task<List<string>> ExtractConfigAsync(
             string config7zPath,
-            string targetDirectory)
+            string targetDirectory,
+            string? settingsOverridesJson = null)
         {
             if (!File.Exists(config7zPath))
             {
@@ -66,7 +67,7 @@ namespace NewAxis.Services
                 if (jsonInstructionsPath != null)
                 {
                     Console.WriteLine($"[Config] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
-                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory);
+                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson);
                 }
                 else
                 {
@@ -92,10 +93,11 @@ namespace NewAxis.Services
             }
         }
 
-        private static async Task<List<string>> ApplyJsonInstructionsAsync(
+        internal static async Task<List<string>> ApplyJsonInstructionsAsync(
             string jsonPath,
             string sourceDir,
-            string targetDirectory)
+            string targetDirectory,
+            string? settingsOverridesJson)
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
@@ -108,24 +110,65 @@ namespace NewAxis.Services
                 {
                     Console.WriteLine("[Config] Found valid T configuration definitions. Processing instructions.");
 
-                    // Process Default Presets
+                    // Parse Overrides if present
+                    List<GameSettingOverride>? overrides = null;
+                    if (!string.IsNullOrEmpty(settingsOverridesJson))
+                    {
+                        try
+                        {
+                            overrides = JsonSerializer.Deserialize(settingsOverridesJson, AppJsonContext.Default.ListGameSettingOverride);
+                            if (overrides != null) Console.WriteLine($"[Config] Loaded {overrides.Count} settings overrides.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[Config] Failed to parse settings overrides: {ex.Message}");
+                        }
+                    }
+
+                    // Process definitions
                     foreach (var root in rootList.Where(x => x != null))
                     {
-                        if (!string.IsNullOrEmpty(root.DefaultPreset) && root.ConfigFilePaths != null)
+                        if (string.IsNullOrEmpty(root.Name) && root.ConfigFilePaths == null) continue;
+
+                        var configPathEntry = root.ConfigFilePaths?.FirstOrDefault(x => x != null && !string.IsNullOrEmpty(x.Path));
+                        if (configPathEntry != null && configPathEntry.Path != null)
                         {
-                            var configPathEntry = root.ConfigFilePaths.FirstOrDefault(x => x != null && !string.IsNullOrEmpty(x.Path));
-                            if (configPathEntry != null && configPathEntry.Path != null)
+                            var targetPresetPath = configPathEntry.Path
+                                    .Replace("%GameRoot%", targetDirectory)
+                                    .Replace("%LOCALAPPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
+                                    .Replace("%APPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+
+                            var targetDir = Path.GetDirectoryName(targetPresetPath);
+                            if (!string.IsNullOrEmpty(targetDir)) Directory.CreateDirectory(targetDir);
+
+                            // 1. Determine base content
+                            string contentToWrite = "";
+
+                            if (File.Exists(targetPresetPath))
                             {
-                                var sourcePresetPath = configPathEntry.Path.Replace("%GameRoot%", targetDirectory);
+                                // If file exists, read it
+                                contentToWrite = await File.ReadAllTextAsync(targetPresetPath);
+                                // Create backup if not exists
+                                var backupPath = targetPresetPath + ".disabled";
+                                if (!File.Exists(backupPath)) File.Copy(targetPresetPath, backupPath, overwrite: false);
+                            }
+                            else if (!string.IsNullOrEmpty(root.DefaultPreset))
+                            {
+                                // Use default preset
+                                contentToWrite = root.DefaultPreset;
+                            }
 
-                                if (File.Exists(sourcePresetPath))
-                                {
-                                    var backupPath = sourcePresetPath + ".disabled";
-                                    if (!File.Exists(backupPath)) File.Copy(sourcePresetPath, backupPath, overwrite: false);
-                                }
+                            // 2. Apply Overrides
+                            if (overrides != null && overrides.Count > 0 && !string.IsNullOrEmpty(contentToWrite))
+                            {
+                                contentToWrite = ApplySettingsToContent(contentToWrite, root, overrides);
+                            }
 
-                                await File.WriteAllTextAsync(sourcePresetPath, root.DefaultPreset);
-                                installedFiles.Add(sourcePresetPath);
+                            // 3. Write file
+                            if (!string.IsNullOrEmpty(contentToWrite))
+                            {
+                                await File.WriteAllTextAsync(targetPresetPath, contentToWrite);
+                                installedFiles.Add(targetPresetPath);
                             }
                         }
                     }
@@ -141,6 +184,198 @@ namespace NewAxis.Services
             // Fallback
             Console.WriteLine("[Config] Invalid or empty instruction file, falling back to copy all.");
             return await CopyAllFilesAsync(sourceDir, targetDirectory);
+        }
+
+        private static string ApplySettingsToContent(string content, Root root, List<GameSettingOverride> overrides)
+        {
+            var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).ToList();
+            var separator = root.KeyValueSeparator == 1 ? ":" : "=";
+
+            foreach (var setting in overrides)
+            {
+                if (setting.GameSettingId == null) continue;
+
+                var definition = FindChildById(root.Children, setting.GameSettingId);
+                if (definition != null)
+                {
+                    ProcessSetting(lines, definition, setting.Value, separator, root.KeyValueSeparator);
+                }
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static void ProcessSetting(List<string> lines, Child definition, string? value, string separator, int keyValueSeparator)
+        {
+            // Handle Resolution (ValueRangeType == 3)
+            if (definition.ValueRangeType == 3 && definition.Children != null && !string.IsNullOrEmpty(value))
+            {
+                var parts = value.ToLower().Split('x');
+                if (parts.Length == 2)
+                {
+                    var width = parts[0].Trim();
+                    var height = parts[1].Trim();
+
+                    foreach (var child in definition.Children)
+                    {
+                        var childValue = child.OverrideValue;
+                        if (!string.IsNullOrEmpty(childValue))
+                        {
+                            childValue = childValue.Replace("%ResWidth%", width, StringComparison.OrdinalIgnoreCase)
+                                                   .Replace("%ResHeight%", height, StringComparison.OrdinalIgnoreCase);
+
+                            ProcessSingleSetting(lines, child, definition, childValue, separator, keyValueSeparator);
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Handle Standard Setting
+            ProcessSingleSetting(lines, definition, definition, value, separator, keyValueSeparator);
+        }
+
+        private static void ProcessSingleSetting(List<string> lines, Child definition, Child? parent, string? rawValue, string separator, int keyValueSeparator)
+        {
+            string? keyToUse = definition.KeyOrSearchPattern;
+
+            if (string.IsNullOrEmpty(keyToUse))
+            {
+                if (keyValueSeparator == 2 && !string.IsNullOrEmpty(definition.ID))
+                {
+                    keyToUse = definition.ID;
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            // Determine value to write
+            string valueToWrite = rawValue ?? "";
+
+            // Check mapping on Parent first (e.g. Resolution definition holds values), then self
+            var availableValues = parent?.AvailableSettingValues ?? definition.AvailableSettingValues;
+
+            if (availableValues != null)
+            {
+                var predefined = availableValues.FirstOrDefault(
+                    v => string.Equals(v.FriendlyName, rawValue, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(v.Value, rawValue, StringComparison.OrdinalIgnoreCase));
+
+                if (predefined != null && predefined.Value != null)
+                {
+                    valueToWrite = predefined.Value;
+                }
+            }
+
+            // Determine Search Range
+            int startLine = 0;
+            if (!string.IsNullOrEmpty(definition.PrecedingElement))
+            {
+                bool precedingFound = false;
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    if (lines[i].Contains(definition.PrecedingElement, StringComparison.OrdinalIgnoreCase))
+                    {
+                        startLine = i + 1;
+                        precedingFound = true;
+                        break;
+                    }
+                }
+
+                // If PrecedingElement defined but not found, we skip processing to be safe
+                if (!precedingFound) return;
+            }
+
+            // Pattern Matching Mode ({0})
+            if (keyToUse.Contains("{0}"))
+            {
+                var parts = keyToUse.Split(new[] { "{0}" }, StringSplitOptions.None);
+                var prefix = parts[0];
+                var suffix = parts.Length > 1 ? parts[1] : "";
+
+                bool found = false;
+                for (int i = startLine; i < lines.Count; i++)
+                {
+                    var line = lines[i];
+                    int prefixIndex = line.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+
+                    if (prefixIndex >= 0)
+                    {
+                        // Check suffix if exists
+                        if (!string.IsNullOrEmpty(suffix))
+                        {
+                            int suffixIndex = line.IndexOf(suffix, prefixIndex + prefix.Length, StringComparison.OrdinalIgnoreCase);
+                            if (suffixIndex > prefixIndex)
+                            {
+                                // Replace content between prefix and suffix
+                                var before = line.Substring(0, prefixIndex + prefix.Length);
+                                var after = line.Substring(suffixIndex);
+                                lines[i] = before + valueToWrite + after;
+                                found = true;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            // No suffix, replace everything after prefix
+                            var before = line.Substring(0, prefixIndex + prefix.Length);
+                            lines[i] = before + valueToWrite;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!found && startLine == 0) // Only append if we searched whole file (no preceding requirement blocking context)
+                {
+                    try
+                    {
+                        lines.Add(keyToUse.Replace("{0}", valueToWrite));
+                    }
+                    catch
+                    {
+                        // Fallback just in case
+                    }
+                }
+            }
+            else
+            {
+                // Standard INI Mode (Key=Value logic)
+                bool found = false;
+                for (int i = startLine; i < lines.Count; i++)
+                {
+                    var line = lines[i].Trim();
+                    if (line.StartsWith(keyToUse, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var remainder = line.Substring(keyToUse.Length).TrimStart();
+                        if (remainder.StartsWith(separator) || remainder.Length == 0)
+                        {
+                            lines[i] = $"{keyToUse}{separator}{valueToWrite}";
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!found && startLine == 0)
+                {
+                    lines.Add($"{keyToUse}{separator}{valueToWrite}");
+                }
+            }
+        }
+
+        private static Child? FindChildById(List<Child>? children, string id)
+        {
+            if (children == null) return null;
+            foreach (var child in children)
+            {
+                if (child.ID == id) return child;
+                var found = FindChildById(child.Children, id);
+                if (found != null) return found;
+            }
+            return null;
         }
 
         private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string targetDirectory)

@@ -203,6 +203,8 @@ namespace NewAxis.Services
         public string? OverwatchPath { get; set; }
         public long? UseAspectRatioHeuristics { get; set; }
         public long? DepthCopyBeforeClears { get; set; }
+        public string? SettingsPlus { get; set; }
+        public string? SettingsUltra { get; set; }
 
         public ImageUrls? Images { get; set; }
         public string? ConfigArchivePath { get; set; }
