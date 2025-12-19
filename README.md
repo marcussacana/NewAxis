@@ -56,38 +56,26 @@ Want to add support for a new game? We welcome community contributions!
 
 ### How to Submit a Mod
 
-1. **Fork** this repository
+1. **Fork** The NewAxisData repository
 2. **Add your mod files** to the repository
 3. **Create a `community.json`** file following the same structure as `index.json`
 4. **Submit a Pull Request** with:
-   - Mod binary files (`.7z` archives)
-   - Metadata in `community.json`
-   - Game name, creator info, and download URLs
+    - Mod binary files (`.7z` archives)
+    - Metadata in `community.json`
+    - Game name, creator info, and download URLs+
+    - Follow the structure of the `index.json` file
 
-### Example `community.json` Structure
 
-```json
-{
-  "TotalGames": 1,
-  "Games": [
-    {
-      "GameName": "Your Game Name",
-      "Creator": "Your Name",
-      "DirectoryName": "GameFolder",
-      "ExecutablePath": "Game.exe",
-      "RelativeExecutablePath": "",
-      "ShaderMod": "path/to/shadermod.7z",
-      "MigotoPath": "path/to/migoto.7z",
-      "ReshadePath": "path/to/reshade.7z",
-      "Images": {
-        "Icon": "path/to/icon.png",
-        "Wallpaper": "path/to/banner.jpg",
-        "Logo": "path/to/logo.png"
-      }
-    }
-  ]
-}
-```
+## Roadmap
+1. Make current mods work  
+2. Add Lenovo games
+3. Add Samsung games
+4. Add geo-11 community fixes
+
+Notes:
+- NewAxis will withhold patch updates for a minimum of three months after a new game is released on Acer, Samsung, or Lenovo platforms.
+- If a currently released game crashes due to a missing update, it may be eligible for an early update before the three-month period ends.
+- Games with native support (such as Tomb Raider on Acer or Stellar Blade on Samsung) will likely not be supported by NewAxis.
 
 ## Requirements
 
@@ -123,7 +111,7 @@ Special thanks to the 3D gaming community and all contributors who help expand g
 
 ## Disclaimer:
 
-This project is independent and is not affiliated with, endorsed by, sponsored by, or otherwise associated with Acer Inc. All trademarks belong to their respective owners.
+This project is independent and is not affiliated with, endorsed by, sponsored by, or otherwise associated with Acer Inc., Samsung, or any other company. All trademarks belong to their respective owners.
 
 ---
 

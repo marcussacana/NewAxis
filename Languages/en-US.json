@@ -28,6 +28,7 @@
   "SelectGamePrompt": "Select a game to begin",
   "DownloadingData": "Downloading Data",
   "DownloadingUpdate": "Downloading Update",
+  "LoadingGames": "Loading Games...",
   "PreparingData": "Preparing",
   "RestoringData": "Restoring Data",
   "ConnectionError": "Connection Error",

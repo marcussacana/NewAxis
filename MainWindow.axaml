@@ -36,8 +36,35 @@
             
             <!-- Sidebar (Game List) -->
             <Border Grid.Column="0" Background="#252526" BorderBrush="#333333" BorderThickness="0,0,1,0">
-                <Grid RowDefinitions="*, Auto">
-                    <ListBox Grid.Row="0" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
+                <Grid RowDefinitions="Auto, *, Auto">
+                    
+                    <!-- Loading Indicator -->
+                    <Border Grid.Row="0" Margin="15,10" Padding="10" Background="#2d2d2d" CornerRadius="4" IsVisible="{Binding IsLoadingGames}">
+                         <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                            <TextBlock Text="●" Foreground="#007acc" VerticalAlignment="Center" FontSize="12">
+                                <TextBlock.Styles>
+                                    <Style Selector="TextBlock">
+                                         <Style.Animations>
+                                             <Animation Duration="0:0:1" IterationCount="Infinite">
+                                                 <KeyFrame Cue="0%">
+                                                     <Setter Property="Opacity" Value="0.3"/>
+                                                 </KeyFrame>
+                                                 <KeyFrame Cue="50%">
+                                                     <Setter Property="Opacity" Value="1.0"/>
+                                                 </KeyFrame>
+                                                 <KeyFrame Cue="100%">
+                                                     <Setter Property="Opacity" Value="0.3"/>
+                                                 </KeyFrame>
+                                             </Animation>
+                                         </Style.Animations>
+                                    </Style>
+                                </TextBlock.Styles>
+                           </TextBlock>
+                           <TextBlock Text="{Binding Localization[LoadingGames]}" Foreground="#aaaaaa" VerticalAlignment="Center" FontSize="12"/>
+                        </StackPanel>
+                    </Border>
+
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                             <Border Padding="10">
@@ -65,7 +92,7 @@
                     </ListBox>
 
                     <!-- Sidebar Footer -->
-                    <Border Grid.Row="1" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="10">
+                    <Border Grid.Row="2" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="10">
                         <StackPanel Spacing="10">
                             <TextBox Text="{Binding SearchQuery, Mode=TwoWay}" 
                                      Watermark="{Binding Localization[SearchGames]}"

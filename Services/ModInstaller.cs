@@ -326,8 +326,6 @@ namespace NewAxis.Services
             }
             else
             {
-
-
                 // Use hash of URL to avoid collisions
                 var urlHash = ComputeHash(urlOrPath);
                 var fileName = Path.GetFileName(urlOrPath);

@@ -7,9 +7,6 @@ using System.Threading.Tasks;
 
 namespace NewAxis.Services
 {
-    /// <summary>
-    /// Cliente para descoberta de jogos via HTTP ou diretório local (para debug)
-    /// </summary>
     public class GameRepositoryClient
     {
         private const string REPO_BASE = @".\GameDownloader\Downloads";
@@ -42,14 +39,12 @@ namespace NewAxis.Services
 
             if (_isLocalPath)
             {
-                // Modo local para depuração
                 var indexPath = Path.Combine(_baseUrl, "index.json");
                 Console.WriteLine($"Reading local index: {indexPath}");
                 json = await File.ReadAllTextAsync(indexPath);
             }
             else
             {
-                // Modo HTTP
                 var indexUrl = $"{_baseUrl}/index.json";
                 Console.WriteLine($"Downloading index: {indexUrl}");
                 json = await _httpClient!.GetStringAsync(indexUrl);
@@ -80,9 +75,6 @@ namespace NewAxis.Services
                     else
                     {
                         System.Diagnostics.Debug.WriteLine($"Local image not found: {fullLocalPath}");
-                        // Return empty or null?
-                        // The downstream logic expects bytes. Return empty array or let caching logic below try fallback?
-                        // If it's local mode, we probably shouldn't try caching logic designed for downloads.
                         return Array.Empty<byte>();
                     }
                 }
@@ -135,8 +127,6 @@ namespace NewAxis.Services
 
         private string GetSafeFilename(string url)
         {
-            // Simple hash to keep filenames short and unique
-            // Or just sanitize. Given URL length, hashing is safer for filesystem limits.
             using (var sha = System.Security.Cryptography.SHA256.Create())
             {
                 var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url));
@@ -150,14 +140,12 @@ namespace NewAxis.Services
 
             if (_isLocalPath)
             {
-                // Modo local - copia do filesystem
                 var sourcePath = Path.Combine(_baseUrl, relativeUrl);
                 Console.WriteLine($"Copying local file: {sourcePath}");
                 bytes = await File.ReadAllBytesAsync(sourcePath);
             }
             else
             {
-                // Modo HTTP - download
                 var fullUrl = $"{_baseUrl}/{relativeUrl}";
                 Console.WriteLine($"Downloading file: {fullUrl}");
                 bytes = await _httpClient!.GetByteArrayAsync(fullUrl);
@@ -175,7 +163,6 @@ namespace NewAxis.Services
         public bool IsLocalMode => _isLocalPath;
     }
 
-    // Models necessários
     public class GameIndex
     {
         public string? GeneratedAt { get; set; }

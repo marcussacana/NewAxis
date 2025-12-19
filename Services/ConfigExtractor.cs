@@ -30,13 +30,11 @@ namespace NewAxis.Services
 
             var installedFiles = new List<string>();
 
-            // Extract to temp directory first
             var tempExtractDir = Path.Combine(Path.GetTempPath(), $"Config_{Guid.NewGuid()}");
             Directory.CreateDirectory(tempExtractDir);
 
             try
             {
-                // Extract entire archive
                 Console.WriteLine("[Config] Extracting archive...");
                 using (var archive = ArchiveFactory.Open(config7zPath))
                 {
@@ -60,7 +58,6 @@ namespace NewAxis.Services
                     }
                 }
 
-                // Look for JSON instructions file or "T" file
                 var allFiles = Directory.GetFiles(tempExtractDir, "*", SearchOption.TopDirectoryOnly);
                 var jsonInstructionsPath = allFiles.FirstOrDefault(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                                            ?? allFiles.FirstOrDefault(f => Path.GetFileName(f).Equals("T", StringComparison.OrdinalIgnoreCase));
@@ -72,7 +69,6 @@ namespace NewAxis.Services
                 }
                 else
                 {
-                    // No JSON instructions, copy all files directly
                     Console.WriteLine("[Config] No JSON instructions found, copying all files...");
                     installedFiles = await CopyAllFilesAsync(tempExtractDir, targetDirectory);
                 }
@@ -82,7 +78,6 @@ namespace NewAxis.Services
             }
             finally
             {
-                // Cleanup temp directory
                 try
                 {
                     if (Directory.Exists(tempExtractDir))
@@ -103,7 +98,6 @@ namespace NewAxis.Services
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
 
-            // Try parsing as List<Root> (New T format)
             try
             {
                 var rootList = JsonSerializer.Deserialize(jsonContent, AppJsonContext.Default.ListRoot);
@@ -143,7 +137,6 @@ namespace NewAxis.Services
                                 var targetDir = Path.GetDirectoryName(targetPresetPath);
                                 if (!string.IsNullOrEmpty(targetDir)) Directory.CreateDirectory(targetDir);
 
-                                // 1. Determine base content
                                 string contentToWrite = "";
 
                                 if (File.Exists(targetPresetPath))
@@ -160,13 +153,11 @@ namespace NewAxis.Services
                                     contentToWrite = root.DefaultPreset;
                                 }
 
-                                // 2. Apply Overrides
                                 if (overrides != null && overrides.Count > 0)
                                 {
                                     contentToWrite = ApplySettingsToContent(contentToWrite, root, overrides);
                                 }
 
-                                // 3. Write file
                                 if (!string.IsNullOrEmpty(contentToWrite))
                                 {
                                     await File.WriteAllTextAsync(targetPresetPath, contentToWrite);
@@ -184,7 +175,6 @@ namespace NewAxis.Services
                 Console.WriteLine($"[Config] T format parsing failed: {ex.Message}");
             }
 
-            // Fallback
             Console.WriteLine("[Config] Invalid or empty instruction file, falling back to copy all.");
             return await CopyAllFilesAsync(sourceDir, targetDirectory);
         }

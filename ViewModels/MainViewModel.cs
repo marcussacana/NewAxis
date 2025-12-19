@@ -391,7 +391,7 @@ public class MainViewModel : ViewModelBase
             {
                 Localization.CurrentLanguage = value;
                 OnPropertyChanged(nameof(SelectedLanguage));
-                OnPropertyChanged(nameof(Localization)); // Force re-binding of the Localization object
+                OnPropertyChanged(nameof(Localization));
                 Debug.WriteLine($"Language changed to {value}");
             }
         }
@@ -480,10 +480,27 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private bool _isLoadingGames;
+    public bool IsLoadingGames
+    {
+        get => _isLoadingGames;
+        set
+        {
+            if (_isLoadingGames != value)
+            {
+                _isLoadingGames = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     private async Task LoadGamesFromRepositoryAsync()
     {
         try
         {
+            IsLoadingGames = true;
+            RefreshGamesList();
+
             var index = await _repoClient.GetGameIndexAsync();
 
             Debug.WriteLine($"Loaded {index.TotalGames} games from repository");
@@ -512,7 +529,6 @@ public class MainViewModel : ViewModelBase
 
                 RefreshGamesList();
 
-                // We run this on a background thread to allow UI to remain responsive
                 await Task.Run(async () =>
                 {
                     foreach (var gameEntry in index.Games)
@@ -554,7 +570,10 @@ public class MainViewModel : ViewModelBase
             }
 
             _allGames.AddRange(notFoundGames);
+
+            IsLoadingGames = false;
             RefreshGamesList();
+            SaveConfig();
 
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
         }
@@ -699,7 +718,6 @@ public class MainViewModel : ViewModelBase
         {
             if (game.Tag is GameIndexEntry indexEntry && !string.IsNullOrEmpty(indexEntry.Images?.Icon))
             {
-                // Debug.WriteLine($"Downloading icon for {game.Name}");
                 game.IconImage = await LoadImageAsync(indexEntry.Images.Icon);
             }
         }
@@ -712,7 +730,7 @@ public class MainViewModel : ViewModelBase
         Games.Clear();
 
         var filteredGames = _allGames
-            .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) && // Show if has mods OR is installed (from config)
+            .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) &&
                         (ShowUninstalledGames || g.IsInstalled) &&
                         (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(g => g.Name);

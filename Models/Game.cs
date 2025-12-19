@@ -117,10 +117,8 @@ public class Game : INotifyPropertyChanged
         }
     }
 
-    // Adapter for UI binding (read-only view)
     public List<string> SupportedMods => SupportedModTypes.Select(type => type.GetDescription()).ToList();
 
-    // Stores additional metadata (GameIndexEntry)
     public object? Tag { get; set; }
 
     public string Initials => Name.Length > 0 ? Name.Substring(0, 1) : "?";
