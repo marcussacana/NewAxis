@@ -37,7 +37,7 @@
             <!-- Sidebar (Game List) -->
             <Border Grid.Column="0" Background="#252526" BorderBrush="#333333" BorderThickness="0,0,1,0">
                 <Grid RowDefinitions="*, Auto">
-                    <ListBox ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
+                    <ListBox Grid.Row="0" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame, Mode=TwoWay}" Background="Transparent" BorderThickness="0">
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                             <Border Padding="10">
@@ -66,7 +66,17 @@
 
                     <!-- Sidebar Footer -->
                     <Border Grid.Row="1" BorderBrush="#333333" BorderThickness="0,1,0,0" Padding="10">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
+                        <StackPanel Spacing="10">
+                            <TextBox Text="{Binding SearchQuery, Mode=TwoWay}" 
+                                     Watermark="{Binding Localization[SearchGames]}"
+                                     Margin="0,0,0,5">
+                                <TextBox.InnerLeftContent>
+                                    <Path Data="M9.5,3A6.5,6.5 0 0,1 16,9.5C16,11.11 15.41,12.59 14.44,13.73L19.71,19L18.29,20.41L13,15.14C11.86,16.11 10.38,16.7 8.5,16.7A7.2,7.2 0 1,1 8.5,2.3C10.38,2.3 11.86,2.89 13,3.86Z" 
+                                          Fill="Gray" Stretch="Uniform" Width="14" Height="14" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                </TextBox.InnerLeftContent>
+                            </TextBox>
+                            
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
                             <Button Classes="icon" Command="{Binding ToggleHiddenGamesCommand}" Background="Transparent" 
                                     Width="30" Height="30" Padding="0" Foreground="White"
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
@@ -89,7 +99,8 @@
                                       ToolTip.Tip="{Binding Localization[OpenSettings]}"/>
                             </Button>
                         </StackPanel>
-                    </Border>
+                    </StackPanel>
+                </Border>
                 </Grid>
             </Border>
 

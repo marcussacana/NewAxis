@@ -30,5 +30,7 @@
     "PreparingData": "Preparando",
     "RestoringData": "Restaurando Datos",
     "ConnectionError": "Error de Conexión",
-    "DisableDLSS": "Desactivar DLSS"
+    "DisableDLSS": "Desactivar DLSS",
+    "Search": "Buscar",
+    "SearchGames": "Buscar juegos..."
 }

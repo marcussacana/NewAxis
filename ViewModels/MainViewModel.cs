@@ -303,6 +303,17 @@ public class MainViewModel : ViewModelBase
         set => SetField(ref _isProgressOverlayVisible, value);
     }
 
+    private string _searchQuery = string.Empty;
+    public string SearchQuery
+    {
+        get => _searchQuery;
+        set
+        {
+            if (SetField(ref _searchQuery, value))
+                RefreshGamesList();
+        }
+    }
+
     private string _progressOverlayMessage = string.Empty;
     public string ProgressOverlayMessage
     {
@@ -668,14 +679,18 @@ public class MainViewModel : ViewModelBase
     {
         var currentSelection = SelectedGame;
         Games.Clear();
-        foreach (var game in _allGames)
+
+        var filteredGames = _allGames
+            .Where(g => g.SupportedModTypes.Count > 0 &&
+                        (ShowUninstalledGames || g.IsInstalled) &&
+                        (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(g => g.Name);
+
+        foreach (var game in filteredGames)
         {
-            if (ShowUninstalledGames || game.IsInstalled)
-            {
-                Games.Add(game);
-                // Eager load icons (fire and forget)
-                _ = LoadGameIconAsync(game);
-            }
+            Games.Add(game);
+            // Eager load icons (fire and forget)
+            _ = LoadGameIconAsync(game);
         }
 
         if (currentSelection != null && Games.Contains(currentSelection))
@@ -825,7 +840,7 @@ public class MainViewModel : ViewModelBase
 
                 while (true)
                 {
-                    await Task.Delay(6000);
+                    await Task.Delay(10000);
 
                     // Detect any running process from the game folder
                     var childs = allExes

@@ -27,7 +27,8 @@ namespace NewAxis.Services
         /// <returns>List of files that were created or modified</returns>
         public static async Task<List<string>> ExtractMigotoAsync(
             string migoto7zPath,
-            string targetDirectory)
+            string targetDirectory,
+            string? executablePath = null)
         {
             if (!File.Exists(migoto7zPath))
             {
@@ -77,7 +78,12 @@ namespace NewAxis.Services
                     Console.WriteLine("[Migoto] Found architecture-specific subdirectories (x64/x32)");
 
 
-                    var executablePath = Directory.GetFiles(targetDirectory, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
+                    if (string.IsNullOrEmpty(executablePath) || !File.Exists(executablePath))
+                    {
+                        Console.WriteLine("[Migoto] Specific executable path not provided or not found, scanning directory...");
+                        executablePath = Directory.GetFiles(targetDirectory, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
+                    }
+
                     if (executablePath is null || !File.Exists(executablePath))
                     {
                         throw new FileNotFoundException($"Target executable not found in: {targetDirectory}");

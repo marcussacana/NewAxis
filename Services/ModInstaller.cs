@@ -54,6 +54,12 @@ namespace NewAxis.Services
             var executablePath = gameEntry.ExecutablePath ?? "";
             var relativeExecutablePath = gameEntry.RelativeExecutablePath ?? "";
             var targetDirectory = Path.Combine(gameInstallPath, relativeExecutablePath);
+            var fullExecutablePath = Path.Combine(gameInstallPath, relativeExecutablePath, Path.GetFileName(executablePath));
+
+            if (!File.Exists(fullExecutablePath) && File.Exists(Path.Combine(gameInstallPath, executablePath)))
+            {
+                fullExecutablePath = Path.Combine(gameInstallPath, executablePath);
+            }
 
             Console.WriteLine($"[ModInstaller] Installing {modType.GetDescription()} mod for {game.Name}...");
 
@@ -113,7 +119,8 @@ namespace NewAxis.Services
                     var migotoLocalPath = await DownloadFileAsync(repoClient, gameEntry.MigotoPath);
                     var migotoFiles = await MigotoExtractor.ExtractMigotoAsync(
                         migotoLocalPath,
-                        targetDirectory);
+                        targetDirectory,
+                        fullExecutablePath);
 
                     installedFiles.AddRange(migotoFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
 
@@ -122,7 +129,8 @@ namespace NewAxis.Services
                         var shaderLocalPath = await DownloadFileAsync(repoClient, gameEntry.ShaderMod);
                         var shaderFiles = await MigotoExtractor.ExtractMigotoAsync(
                             shaderLocalPath,
-                            targetDirectory);
+                            targetDirectory,
+                            fullExecutablePath);
 
                         installedFiles.AddRange(shaderFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                     }

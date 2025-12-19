@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -200,6 +201,10 @@ namespace NewAxis.Services
                 {
                     ProcessSetting(lines, definition, setting.Value, separator, root.KeyValueSeparator);
                 }
+                else
+                {
+                    Console.WriteLine("[Config] Setting not found: " + setting.GameSettingId);
+                }
             }
 
             return string.Join(Environment.NewLine, lines);
@@ -231,8 +236,11 @@ namespace NewAxis.Services
                 return;
             }
 
-            // Handle Standard Setting
-            ProcessSingleSetting(lines, definition, definition, value, separator, keyValueSeparator);
+            foreach (var child in definition!.Children!.Where(x => x != null))
+            {
+                var childValue = child.OverrideValue?.Replace("%InputValue%", value, StringComparison.OrdinalIgnoreCase) ?? value;
+                ProcessSingleSetting(lines, child, definition, childValue, separator, keyValueSeparator);
+            }
         }
 
         private static void ProcessSingleSetting(List<string> lines, Child definition, Child? parent, string? rawValue, string separator, int keyValueSeparator)
@@ -347,6 +355,12 @@ namespace NewAxis.Services
                 for (int i = startLine; i < lines.Count; i++)
                 {
                     var line = lines[i].Trim();
+                    var nextLine = i + 1 < lines.Count ? lines[i + 1].Trim() : "";
+                    if (nextLine != null && nextLine.StartsWith("[") && nextLine.EndsWith("]") && definition.PrecedingElement != null)
+                    {
+                        lines.Insert(i, $"{keyToUse}{separator}{valueToWrite}");
+                        break;
+                    }
                     if (line.StartsWith(keyToUse, StringComparison.OrdinalIgnoreCase))
                     {
                         var remainder = line.Substring(keyToUse.Length).TrimStart();

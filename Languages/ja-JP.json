@@ -30,5 +30,7 @@
     "PreparingData": "準備中",
     "RestoringData": "データを復元中",
     "ConnectionError": "接続エラー",
-    "DisableDLSS": "DLSSを無効にする"
+    "DisableDLSS": "DLSSを無効にする",
+    "Search": "検索",
+    "SearchGames": "ゲームを検索..."
 }
