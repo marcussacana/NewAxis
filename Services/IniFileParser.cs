@@ -86,6 +86,15 @@ public class IniFileParser
         return null;
     }
 
+    public Dictionary<string, string>? GetSection(string group)
+    {
+        if (_data.TryGetValue(group, out var groupData))
+        {
+            return new Dictionary<string, string>(groupData);
+        }
+        return null;
+    }
+
     public void SetValue(string group, string key, string value)
     {
         if (!_data.ContainsKey(group))

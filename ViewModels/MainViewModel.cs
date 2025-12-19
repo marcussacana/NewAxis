@@ -78,6 +78,7 @@ public class MainViewModel : ViewModelBase
 
             return await Task.Run(() =>
             {
+                Debug.WriteLine($"Loading image for {url}");
                 using (var inputStream = new System.IO.MemoryStream(imageBytes))
                 using (var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(inputStream))
                 {
@@ -403,9 +404,10 @@ public class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         _allGames = new List<Game>();
+        _repoClient = new GameRepositoryClient(REPO_BASE);
 
         LoadConfig();
-
+        RefreshGamesList();
 
         _ = LoadGamesFromRepositoryAsync();
 
@@ -482,63 +484,76 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            _repoClient = new GameRepositoryClient(REPO_BASE);
             var index = await _repoClient.GetGameIndexAsync();
 
             Debug.WriteLine($"Loaded {index.TotalGames} games from repository");
 
-            _allGames.Clear();
+            var notFoundGames = new List<Game>();
 
             if (index.Games != null)
             {
-                foreach (var gameEntry in index.Games)
+                var gamesData = _iniParser.GetSection("Games");
+                if (gamesData != null)
                 {
-                    var mods = new List<ModType>();
-
-                    if (!string.IsNullOrEmpty(gameEntry.ShaderMod) && !string.IsNullOrEmpty(gameEntry.MigotoPath))
+                    foreach (var kvp in gamesData)
                     {
-                        mods.Add(ModType.ThreeDUltra);
-                    }
+                        var gameName = kvp.Key;
+                        var installPath = kvp.Value;
 
-                    if (!string.IsNullOrEmpty(gameEntry.ReshadePath))
-                    {
-                        mods.Add(ModType.ThreeDPlus);
-                    }
-
-                    var game = new Game(gameEntry.GameName ?? "Unknown", "", mods)
-                    {
-                        Tag = gameEntry
-                    };
-
-
-                    bool isNew = !_allGames.Any(g => g.Name == game.Name);
-
-                    if (isNew)
-                    {
-                        if (gameEntry.Creator != null)
+                        var gameInfo = index.Games.FirstOrDefault(g => g.GameName == gameName);
+                        if (gameInfo != null && !string.IsNullOrEmpty(installPath))
                         {
-                            game.Creator = gameEntry.Creator;
+                            var game = await LoadGame(gameInfo, gameName);
+                            _allGames.Add(game);
                         }
 
-
-                        if (string.IsNullOrEmpty(game.InstallPath) && !string.IsNullOrEmpty(gameEntry.DirectoryName))
-                        {
-                            var detectedPath = GamePathScanner.FindGameDirectory(
-                                gameEntry.DirectoryName,
-                                gameEntry.ExecutablePath,
-                                gameEntry.RelativeExecutablePath);
-                            if (!string.IsNullOrEmpty(detectedPath))
-                            {
-                                game.InstallPath = detectedPath;
-                                Debug.WriteLine($"Auto-detected path for {game.Name}: {detectedPath}");
-                            }
-                        }
-
-                        _allGames.Add(game);
                     }
                 }
+
+                RefreshGamesList();
+
+                // We run this on a background thread to allow UI to remain responsive
+                await Task.Run(async () =>
+                {
+                    foreach (var gameEntry in index.Games)
+                    {
+                        try
+                        {
+                            var gameName = gameEntry.GameName ?? "Unknown";
+
+                            var existingGame = _allGames.FirstOrDefault(g => g.Name == gameName);
+                            if (existingGame != null)
+                            {
+                                continue;
+                            }
+
+                            Game game = await LoadGame(gameEntry, gameName);
+
+                            if (!string.IsNullOrEmpty(game.InstallPath) && game.SupportedMods.Count > 0)
+                            {
+                                _allGames.Add(game);
+
+                                // Incremental UI Update
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                {
+                                    RefreshGamesList();
+                                });
+                            }
+                            else
+                            {
+                                notFoundGames.Add(game);
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Error processing game {gameEntry.GameName}: {ex.Message}");
+                        }
+                    }
+                });
             }
 
+            _allGames.AddRange(notFoundGames);
             RefreshGamesList();
 
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
@@ -567,6 +582,31 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private async Task<Game> LoadGame(GameIndexEntry gameEntry, string gameName)
+    {
+        List<ModType> mods = new List<ModType>();
+        if (!string.IsNullOrEmpty(gameEntry.ShaderMod) && !string.IsNullOrEmpty(gameEntry.MigotoPath)) mods.Add(ModType.ThreeDUltra);
+        if (!string.IsNullOrEmpty(gameEntry.ReshadePath)) mods.Add(ModType.ThreeDPlus);
+
+        var game = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => new Game(gameName, "", mods) { Tag = gameEntry });
+        if (gameEntry.Creator != null) game.Creator = gameEntry.Creator;
+        if (!string.IsNullOrEmpty(gameEntry.DirectoryName))
+        {
+            var detectedPath = GamePathScanner.FindGameDirectory(
+                gameEntry.DirectoryName,
+                gameEntry.ExecutablePath,
+                gameEntry.RelativeExecutablePath);
+
+            if (!string.IsNullOrEmpty(detectedPath))
+            {
+                game.InstallPath = detectedPath;
+                Debug.WriteLine($"Auto-detected path for {game.Name}: {detectedPath}");
+            }
+        }
+
+        return game;
+    }
+
     private void LoadConfig()
     {
         try
@@ -589,15 +629,6 @@ public class MainViewModel : ViewModelBase
             LoadHotkey("DepthDec", (d, k, m) => { HotkeyDepthDec = d; KeyDepthDec = k; ModDepthDec = m; });
             LoadHotkey("PopoutInc", (d, k, m) => { HotkeyPopoutInc = d; KeyPopoutInc = k; ModPopoutInc = m; });
             LoadHotkey("PopoutDec", (d, k, m) => { HotkeyPopoutDec = d; KeyPopoutDec = k; ModPopoutDec = m; });
-
-            foreach (var game in _allGames)
-            {
-                var path = _iniParser.GetValue("Games", game.Name);
-                if (path != null)
-                {
-                    game.InstallPath = path;
-                }
-            }
         }
         catch (Exception ex)
         {
@@ -681,7 +712,7 @@ public class MainViewModel : ViewModelBase
         Games.Clear();
 
         var filteredGames = _allGames
-            .Where(g => g.SupportedModTypes.Count > 0 &&
+            .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) && // Show if has mods OR is installed (from config)
                         (ShowUninstalledGames || g.IsInstalled) &&
                         (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(g => g.Name);
@@ -689,7 +720,6 @@ public class MainViewModel : ViewModelBase
         foreach (var game in filteredGames)
         {
             Games.Add(game);
-            // Eager load icons (fire and forget)
             _ = LoadGameIconAsync(game);
         }
 
