@@ -27,6 +27,7 @@
   "OpenSettings": "Settings",
   "SelectGamePrompt": "Select a game to begin",
   "DownloadingData": "Downloading Data",
+  "DownloadingUpdate": "Downloading Update",
   "PreparingData": "Preparing",
   "RestoringData": "Restoring Data",
   "ConnectionError": "Connection Error",

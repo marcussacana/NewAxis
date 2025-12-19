@@ -131,45 +131,47 @@ namespace NewAxis.Services
                     {
                         if (string.IsNullOrEmpty(root.Name) && root.ConfigFilePaths == null) continue;
 
-                        var configPathEntry = root.ConfigFilePaths?.FirstOrDefault(x => x != null && !string.IsNullOrEmpty(x.Path));
-                        if (configPathEntry != null && configPathEntry.Path != null)
+                        if (root.ConfigFilePaths != null)
                         {
-                            var targetPresetPath = configPathEntry.Path
+                            foreach (var configPathEntry in root.ConfigFilePaths.Where(x => x != null && !string.IsNullOrEmpty(x.Path)))
+                            {
+                                var targetPresetPath = configPathEntry.Path!
                                     .Replace("%GameRoot%", targetDirectory)
                                     .Replace("%LOCALAPPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
                                     .Replace("%APPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
 
-                            var targetDir = Path.GetDirectoryName(targetPresetPath);
-                            if (!string.IsNullOrEmpty(targetDir)) Directory.CreateDirectory(targetDir);
+                                var targetDir = Path.GetDirectoryName(targetPresetPath);
+                                if (!string.IsNullOrEmpty(targetDir)) Directory.CreateDirectory(targetDir);
 
-                            // 1. Determine base content
-                            string contentToWrite = "";
+                                // 1. Determine base content
+                                string contentToWrite = "";
 
-                            if (File.Exists(targetPresetPath))
-                            {
-                                // If file exists, read it
-                                contentToWrite = await File.ReadAllTextAsync(targetPresetPath);
-                                // Create backup if not exists
-                                var backupPath = targetPresetPath + ".disabled";
-                                if (!File.Exists(backupPath)) File.Copy(targetPresetPath, backupPath, overwrite: false);
-                            }
-                            else if (!string.IsNullOrEmpty(root.DefaultPreset))
-                            {
-                                // Use default preset
-                                contentToWrite = root.DefaultPreset;
-                            }
+                                if (File.Exists(targetPresetPath))
+                                {
+                                    // If file exists, read it
+                                    contentToWrite = await File.ReadAllTextAsync(targetPresetPath);
+                                    // Create backup if not exists
+                                    var backupPath = targetPresetPath + ".disabled";
+                                    if (!File.Exists(backupPath)) File.Copy(targetPresetPath, backupPath, overwrite: false);
+                                }
+                                else if (!string.IsNullOrEmpty(root.DefaultPreset))
+                                {
+                                    // Use default preset
+                                    contentToWrite = root.DefaultPreset;
+                                }
 
-                            // 2. Apply Overrides
-                            if (overrides != null && overrides.Count > 0 && !string.IsNullOrEmpty(contentToWrite))
-                            {
-                                contentToWrite = ApplySettingsToContent(contentToWrite, root, overrides);
-                            }
+                                // 2. Apply Overrides
+                                if (overrides != null && overrides.Count > 0)
+                                {
+                                    contentToWrite = ApplySettingsToContent(contentToWrite, root, overrides);
+                                }
 
-                            // 3. Write file
-                            if (!string.IsNullOrEmpty(contentToWrite))
-                            {
-                                await File.WriteAllTextAsync(targetPresetPath, contentToWrite);
-                                installedFiles.Add(targetPresetPath);
+                                // 3. Write file
+                                if (!string.IsNullOrEmpty(contentToWrite))
+                                {
+                                    await File.WriteAllTextAsync(targetPresetPath, contentToWrite);
+                                    installedFiles.Add(targetPresetPath);
+                                }
                             }
                         }
                     }
@@ -292,8 +294,24 @@ namespace NewAxis.Services
                     }
                 }
 
-                // If PrecedingElement defined but not found, we skip processing to be safe
-                if (!precedingFound) return;
+                // If PrecedingElement defined but not found
+                if (!precedingFound)
+                {
+                    // Auto-create section if it looks like one
+                    if (definition.PrecedingElement.StartsWith("[") && definition.PrecedingElement.EndsWith("]"))
+                    {
+                        if (lines.Count > 0 && !string.IsNullOrWhiteSpace(lines.Last()))
+                        {
+                            lines.Add("");
+                        }
+                        lines.Add(definition.PrecedingElement);
+                        startLine = lines.Count;
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
             }
 
             // Pattern Matching Mode ({0})
@@ -359,6 +377,7 @@ namespace NewAxis.Services
                     if (nextLine != null && nextLine.StartsWith("[") && nextLine.EndsWith("]") && definition.PrecedingElement != null)
                     {
                         lines.Insert(i, $"{keyToUse}{separator}{valueToWrite}");
+                        found = true;
                         break;
                     }
                     if (line.StartsWith(keyToUse, StringComparison.OrdinalIgnoreCase))
@@ -373,7 +392,7 @@ namespace NewAxis.Services
                     }
                 }
 
-                if (!found && startLine == 0)
+                if (!found)
                 {
                     lines.Add($"{keyToUse}{separator}{valueToWrite}");
                 }

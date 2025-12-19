@@ -466,6 +466,10 @@ public class MainViewModel : ViewModelBase
         try
         {
             if (_repoClient == null) _repoClient = new GameRepositoryClient(REPO_BASE);
+
+            ProgressOverlayMessage = Localization["DownloadingUpdate"];
+            IsProgressOverlayVisible = true;
+
             await UpdateManager.PerformUpdateAsync(PendingUpdateUrl, _repoClient);
         }
         catch (Exception ex)
@@ -501,11 +505,7 @@ public class MainViewModel : ViewModelBase
                         mods.Add(ModType.ThreeDPlus);
                     }
 
-                    var game = new Game(
-                        gameEntry.GameName ?? "Unknown",
-                        "",
-                        mods
-                    )
+                    var game = new Game(gameEntry.GameName ?? "Unknown", "", mods)
                     {
                         Tag = gameEntry
                     };
@@ -838,9 +838,12 @@ public class MainViewModel : ViewModelBase
                 var gameDir = SelectedGame.InstallPath;
                 var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
 
+                DateTime gameStartTime = DateTime.Now;
+
                 while (true)
                 {
-                    await Task.Delay(10000);
+                    var runningTime = DateTime.Now - gameStartTime;
+                    await Task.Delay(runningTime > TimeSpan.FromMinutes(3) ? 1000 : 10000);
 
                     // Detect any running process from the game folder
                     var childs = allExes

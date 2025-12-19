@@ -55,6 +55,7 @@ namespace NewAxis.Services
                 json = await _httpClient!.GetStringAsync(indexUrl);
             }
 
+            Console.WriteLine("Parsing index data");
             return JsonSerializer.Deserialize(json, AppJsonContext.Default.GameIndex)!;
         }
 

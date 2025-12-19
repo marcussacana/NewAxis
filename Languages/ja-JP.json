@@ -27,6 +27,7 @@
     "OpenSettings": "設定",
     "SelectGamePrompt": "開始するにはゲームを選択してください",
     "DownloadingData": "データをダウンロード中",
+    "DownloadingUpdate": "アップデートをダウンロード中",
     "PreparingData": "準備中",
     "RestoringData": "データを復元中",
     "ConnectionError": "接続エラー",
