@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using SharpCompress.Archives;
 using SharpCompress.Common;
+using Microsoft.Win32;
+using System.Runtime.InteropServices;
 
 namespace NewAxis.Services
 {
@@ -134,6 +136,28 @@ namespace NewAxis.Services
                                     .Replace("%LOCALAPPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
                                     .Replace("%APPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
 
+                                // Registry Mode
+                                if (targetPresetPath.StartsWith("HK", StringComparison.OrdinalIgnoreCase) ||
+                                    targetPresetPath.StartsWith("HKEY", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                                    {
+                                        try
+                                        {
+                                            ApplyRegistrySettings(targetPresetPath, root, overrides);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Console.WriteLine($"[Config] Registry error: {ex.Message}");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine($"[Config] Skipping Registry settings on non-Windows platform: {targetPresetPath}");
+                                    }
+                                    continue;
+                                }
+
                                 var targetDir = Path.GetDirectoryName(targetPresetPath);
                                 if (!string.IsNullOrEmpty(targetDir)) Directory.CreateDirectory(targetDir);
 
@@ -183,6 +207,9 @@ namespace NewAxis.Services
         {
             var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).ToList();
             var separator = root.KeyValueSeparator == 1 ? ":" : "=";
+
+            ///KeyValueSeparator == 0 if is registry? 
+
 
             foreach (var setting in overrides)
             {
@@ -431,7 +458,146 @@ namespace NewAxis.Services
 
             return installedFiles;
         }
+
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private static void ApplyRegistrySettings(string registryPath, Root root, List<GameSettingOverride>? overrides)
+        {
+            // Parse Root and SubKey
+            // Expected format: HKEY_CURRENT_USER\Software\...\...
+            string rootKeyName = registryPath.Split('\\')[0];
+            string subKeyPath = registryPath.Substring(rootKeyName.Length).TrimStart('\\');
+
+            RegistryKey? baseKey = rootKeyName.ToUpper() switch
+            {
+                "HKEY_CURRENT_USER" or "HKCU" => Registry.CurrentUser,
+                "HKEY_LOCAL_MACHINE" or "HKLM" => Registry.LocalMachine,
+                "HKEY_CLASSES_ROOT" or "HKCR" => Registry.ClassesRoot,
+                "HKEY_USERS" or "HKU" => Registry.Users,
+                "HKEY_CURRENT_CONFIG" or "HKCC" => Registry.CurrentConfig,
+                _ => null
+            };
+
+            if (baseKey == null)
+            {
+                Console.WriteLine($"[Config] Unknown registry root: {rootKeyName}");
+                return;
+            }
+
+            using (var key = baseKey.CreateSubKey(subKeyPath, writable: true))
+            {
+                if (key == null)
+                {
+                    Console.WriteLine($"[Config] Failed to create/open registry key: {registryPath}");
+                    return;
+                }
+
+                Console.WriteLine($"[Config] Writing to Registry: {registryPath}");
+
+                // Apply DefaultPreset if exists (assuming it's a list of values? No, usually DefaultPreset is a string file content)
+                // For Reg mode, we iterate Children/Overrides instead.
+
+                if (overrides == null || overrides.Count == 0) return;
+
+                foreach (var setting in overrides)
+                {
+                    if (setting.GameSettingId == null) continue;
+                    var definition = FindChildById(root.Children, setting.GameSettingId);
+                    if (definition == null) continue;
+
+                    ProcessRegistrySetting(key, definition, setting.Value);
+                }
+            }
+        }
+
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private static void ProcessRegistrySetting(RegistryKey key, Child definition, string? value)
+        {
+            // Handle Resolution Special Case
+            if (definition.ValueRangeType == 3 && definition.Children != null && !string.IsNullOrEmpty(value))
+            {
+                var parts = value.ToLower().Split('x');
+                if (parts.Length == 2)
+                {
+                    var width = parts[0].Trim();
+                    var height = parts[1].Trim();
+
+                    foreach (var child in definition.Children)
+                    {
+                        var childValue = child.OverrideValue;
+                        if (!string.IsNullOrEmpty(childValue))
+                        {
+                            childValue = childValue.Replace("%ResWidth%", width, StringComparison.OrdinalIgnoreCase)
+                                                   .Replace("%ResHeight%", height, StringComparison.OrdinalIgnoreCase);
+
+                            ProcessSingleRegistrySetting(key, child, childValue);
+                        }
+                    }
+                }
+                return;
+            }
+
+            foreach (var child in definition!.Children!.Where(x => x != null))
+            {
+                var childValue = child.OverrideValue?.Replace("%InputValue%", value, StringComparison.OrdinalIgnoreCase) ?? value;
+                ProcessSingleRegistrySetting(key, child, childValue);
+            }
+        }
+
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private static void ProcessSingleRegistrySetting(RegistryKey key, Child definition, string? value)
+        {
+            if (string.IsNullOrEmpty(definition.KeyOrSearchPattern) && string.IsNullOrEmpty(definition.Name)) return;
+
+            string valueName = definition.KeyOrSearchPattern ?? definition.Name!; // KeyOrSearchPattern holds the Value Name
+
+            // RegistryValueType: 
+            // 4 = DWORD (REG_DWORD)
+            // 1 = String (REG_SZ)
+            // 0/Default -> infer? or assume String? Check user JSON: "RegistryValueType": 4
+
+            try
+            {
+                object? valueToWrite = null;
+                RegistryValueKind kind = RegistryValueKind.Unknown;
+
+                switch (definition.RegistryValueType)
+                {
+                    case 4: // DWORD
+                        if (int.TryParse(value, out int intVal))
+                        {
+                            valueToWrite = intVal;
+                            kind = RegistryValueKind.DWord;
+                        }
+                        else if (long.TryParse(value, out long longVal)) // Handle potential unsigned stuff?
+                        {
+                            valueToWrite = longVal; // Registry.SetValue handles this
+                            kind = RegistryValueKind.DWord;
+                        }
+                        break;
+                    case 1: // String
+                        valueToWrite = value;
+                        kind = RegistryValueKind.String;
+                        break;
+                    default:
+                        // Fallback or assuming string or letting .NET decide
+                        if (int.TryParse(value, out int v)) { valueToWrite = v; kind = RegistryValueKind.DWord; }
+                        else { valueToWrite = value; kind = RegistryValueKind.String; }
+                        break;
+                }
+
+                if (valueToWrite != null)
+                {
+                    key.SetValue(valueName, valueToWrite, kind);
+                    Console.WriteLine($"[Config] Set REG {valueName} = {valueToWrite} ({kind})");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Config] Error setting registry value {valueName}: {ex.Message}");
+            }
+        }
     }
+
 
     public class ConfigInstructions
     {

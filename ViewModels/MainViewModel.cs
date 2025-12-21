@@ -611,10 +611,7 @@ public class MainViewModel : ViewModelBase
         if (gameEntry.Creator != null) game.Creator = gameEntry.Creator;
         if (!string.IsNullOrEmpty(gameEntry.DirectoryName))
         {
-            var detectedPath = GamePathScanner.FindGameDirectory(
-                gameEntry.DirectoryName,
-                gameEntry.ExecutablePath,
-                gameEntry.RelativeExecutablePath);
+            var detectedPath = GamePathScanner.FindGameDirectory(gameEntry);
 
             if (!string.IsNullOrEmpty(detectedPath))
             {
@@ -883,31 +880,32 @@ public class MainViewModel : ViewModelBase
 
                 await Task.Run(() => process.WaitForExit());
 
-                var gameDir = SelectedGame.InstallPath;
-                var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
-
-                DateTime gameStartTime = DateTime.Now;
-
-                while (true)
-                {
-                    var runningTime = DateTime.Now - gameStartTime;
-                    await Task.Delay(runningTime > TimeSpan.FromMinutes(3) ? 1000 : 10000);
-
-                    // Detect any running process from the game folder
-                    var childs = allExes
-                        .Select(path => System.IO.Path.GetFileNameWithoutExtension(path))
-                        .Where(name => !string.IsNullOrEmpty(name))
-                        .SelectMany(name => Process.GetProcessesByName(name!))
-                        .ToList();
-
-                    if (!childs.Any())
-                        break;
-
-                    await Task.WhenAll(childs.Select(x => x.WaitForExitAsync()));
-                }
-
                 if (InstallModTemporarily && !string.IsNullOrEmpty(SelectedMod))
                 {
+
+                    var gameDir = SelectedGame.InstallPath;
+                    var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
+
+                    DateTime gameStartTime = DateTime.Now;
+
+                    while (true)
+                    {
+                        var runningTime = DateTime.Now - gameStartTime;
+                        await Task.Delay(runningTime > TimeSpan.FromMinutes(1) ? 1000 : 10000);
+
+                        // Detect any running process from the game folder
+                        var childs = allExes
+                            .Select(path => System.IO.Path.GetFileNameWithoutExtension(path))
+                            .Where(name => !string.IsNullOrEmpty(name))
+                            .SelectMany(name => Process.GetProcessesByName(name!))
+                            .ToList();
+
+                        if (!childs.Any())
+                            break;
+
+                        await Task.WhenAll(childs.Select(x => x.WaitForExitAsync()));
+                    }
+
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                     {
                         ProgressOverlayMessage = Localization["RestoringData"];

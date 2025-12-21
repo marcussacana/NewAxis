@@ -149,9 +149,9 @@ namespace NewAxis.Services
                         Console.WriteLine($"[ModInstaller] Backed up d3dx.ini to .disabled");
                     }
 
+                    var specialPath = HasUnicodeChars(targetDirectory);
 
-
-                    var d3dxContent = $"[Rendering]\r\nbase_path_override={targetDirectory}";
+                    var d3dxContent = specialPath ? $"" : $"[Rendering]\r\nbase_path_override={targetDirectory}";
 
                     if (!string.IsNullOrEmpty(gameEntry.D3DXSettings))
                     {
@@ -159,13 +159,27 @@ namespace NewAxis.Services
                         Console.WriteLine($"[ModInstaller] Applied D3DXSettings override (Length: {gameEntry.D3DXSettings.Length})");
                     }
 
-                    await File.WriteAllTextAsync(d3dxPath, d3dxContent);
-                    Console.WriteLine($"[ModInstaller] Generated d3dx.ini pointing to {targetDirectory}");
-
-
-                    if (!installedFiles.Contains(d3dxRelPath))
+                    if (!string.IsNullOrWhiteSpace(d3dxContent))
                     {
-                        installedFiles.Add(d3dxRelPath);
+                        await File.WriteAllTextAsync(d3dxPath, d3dxContent, new UTF8Encoding(false));
+                        Console.WriteLine($"[ModInstaller] Generated d3dx.ini pointing to {targetDirectory}");
+
+                        if (!installedFiles.Contains(d3dxRelPath))
+                        {
+                            installedFiles.Add(d3dxRelPath);
+                        }
+                    }
+                    else if (File.Exists(d3dxPath)) // for users with old d3dx.ini
+                    {
+                        try
+                        {
+                            File.Delete(d3dxPath);
+                            Console.WriteLine($"[ModInstaller] Deleted old d3dx.ini");
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine($"[ModInstaller] Failed to delete d3dx.ini: {e.Message}");
+                        }
                     }
                 }
 
@@ -185,6 +199,7 @@ namespace NewAxis.Services
             }
         }
 
+        private static bool HasUnicodeChars(string path) => path.Any(c => c > 0x7F);
         private static void ProcessBlacklist(List<string> installedFiles, string gameInstallPath, string targetDirectory, bool enabled)
         {
             if (!enabled) return;
