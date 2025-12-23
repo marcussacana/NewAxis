@@ -74,6 +74,10 @@ namespace NewAxis.Services
                 {
                     settingsJson = gameEntry.SettingsUltra;
                 }
+                else if (modType == ModType.Native)
+                {
+                    settingsJson = gameEntry.SettingsNative;
+                }
 
                 if (!string.IsNullOrEmpty(gameEntry.ConfigArchivePath))
                 {
@@ -181,6 +185,25 @@ namespace NewAxis.Services
                             Console.WriteLine($"[ModInstaller] Failed to delete d3dx.ini: {e.Message}");
                         }
                     }
+                }
+                else if (modType == ModType.Native)
+                {
+                    if (string.IsNullOrEmpty(gameEntry.NativeReshade) || string.IsNullOrEmpty(gameEntry.NativeReshadeDll))
+                    {
+                        throw new Exception("NativeReshade or NativeReshadeDll not configured");
+                    }
+
+                    Console.WriteLine($"[ModInstaller] Installing Native Reshade mode...");
+                    var nativeReshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.NativeReshade);
+                    var nativeFiles = await ReshadeExtractor.ExtractNativeReshadeAsync(new ReshadeExtractionContext
+                    {
+                        Reshade7zPath = nativeReshadeLocalPath,
+                        TargetDirectory = targetDirectory,
+                        ExecutablePath = fullExecutablePath,
+                        GameEntry = gameEntry
+                    });
+
+                    installedFiles.AddRange(nativeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
 
                 ProcessBlacklist(installedFiles, gameInstallPath, targetDirectory, settings.DisableBlacklistedDlls);
@@ -396,6 +419,19 @@ namespace NewAxis.Services
             Console.WriteLine($"[ModInstaller] Updated truegame.ini: Depth={settings.Depth}, Popout={settings.Popout}");
 
             return;
+        }
+
+        /// <summary>
+        /// Determines if an executable is 64-bit by reading its PE header
+        /// </summary>
+        private static bool IsExecutable64Bit(string exePath)
+        {
+            using (var stream = File.OpenRead(exePath))
+            using (var peReader = new System.Reflection.PortableExecutable.PEReader(stream))
+            {
+                var headers = peReader.PEHeaders;
+                return headers.PEHeader != null && headers.PEHeader.Magic == System.Reflection.PortableExecutable.PEMagic.PE32Plus;
+            }
         }
 
         private static void ApplyTrueGameSettings(ModInstallationSettings settings, string iniPath)

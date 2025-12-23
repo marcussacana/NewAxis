@@ -188,12 +188,16 @@ namespace NewAxis.Services
         public string? ReshadePath { get; set; }
         public string? TargetDllFileName { get; set; }
         public string? ReshadePresetPlus { get; set; }
+        public string? ReshadePresetNative { get; set; }
         public string? OverwatchPath { get; set; }
         public long? UseAspectRatioHeuristics { get; set; }
         public long? DepthCopyBeforeClears { get; set; }
         public string? SettingsPlus { get; set; }
         public string? SettingsUltra { get; set; }
+        public string? SettingsNative { get; set; }
         public string? D3DXSettings { get; set; }
+        public string? NativeReshade { get; set; }
+        public string? NativeReshadeDll { get; set; }
 
         public ImageUrls? Images { get; set; }
         public string? ConfigArchivePath { get; set; }

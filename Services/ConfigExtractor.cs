@@ -9,6 +9,7 @@ using SharpCompress.Archives;
 using SharpCompress.Common;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
+using System.Globalization;
 
 namespace NewAxis.Services
 {
@@ -132,9 +133,10 @@ namespace NewAxis.Services
                             foreach (var configPathEntry in root.ConfigFilePaths.Where(x => x != null && !string.IsNullOrEmpty(x.Path)))
                             {
                                 var targetPresetPath = configPathEntry.Path!
-                                    .Replace("%GameRoot%", targetDirectory)
-                                    .Replace("%LOCALAPPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData))
-                                    .Replace("%APPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+                                    .Replace("%GameRoot%", targetDirectory, true, CultureInfo.InvariantCulture)
+                                    .Replace("%LOCALAPPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), true, CultureInfo.InvariantCulture)
+                                    .Replace("%APPDATA%", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), true, CultureInfo.InvariantCulture)
+                                    .Replace("%USERPROFILE%", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), true, CultureInfo.InvariantCulture);
 
                                 // Registry Mode
                                 if (targetPresetPath.StartsWith("HK", StringComparison.OrdinalIgnoreCase) ||

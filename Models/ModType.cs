@@ -5,7 +5,8 @@ namespace NewAxis.Models;
 public enum ModType
 {
     ThreeDPlus,
-    ThreeDUltra
+    ThreeDUltra,
+    Native
 }
 
 public static class ModTypeExtensions
@@ -16,6 +17,7 @@ public static class ModTypeExtensions
         {
             ModType.ThreeDPlus => "3D+",
             ModType.ThreeDUltra => "3D Ultra",
+            ModType.Native => "Native",
             _ => value.ToString()
         };
     }
@@ -26,6 +28,7 @@ public static class ModTypeExtensions
         {
             "3D+" => ModType.ThreeDPlus,
             "3D Ultra" => ModType.ThreeDUltra,
+            "Native" => ModType.Native,
             _ => null
         };
     }

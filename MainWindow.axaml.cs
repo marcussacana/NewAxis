@@ -1,5 +1,8 @@
 using Avalonia.Controls;
+using NewAxis.Models;
 using NewAxis.ViewModels;
+using System;
+using System.ComponentModel;
 using System.Linq;
 
 namespace NewAxis;
@@ -9,8 +12,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
         var vm = new MainViewModel();
         DataContext = vm;
+
+        //vm.PropertyChanged += OnPropertyChanged;
 
         vm.RequestBrowseFolder += async () =>
         {

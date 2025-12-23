@@ -186,7 +186,7 @@
                                             BorderThickness="0" CornerRadius="0,4,4,0"
                                             Padding="10,10">
                                         <Button.Flyout>
-                                            <MenuFlyout ItemsSource="{Binding SelectedGame.SupportedMods}">
+                                            <MenuFlyout ItemsSource="{Binding #Root.((vm:MainViewModel)DataContext).SupportedMods}">
                                                 <MenuFlyout.ItemContainerTheme>
                                                     <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
                                                         <Setter Property="Command" Value="{Binding #Root.((vm:MainViewModel)DataContext).SelectModCommand}" />
@@ -201,7 +201,6 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
-
                         <!-- Update Overlay -->
                         <Border Grid.RowSpan="2" Background="#AA000000" IsVisible="{Binding ShowUpdatePrompt}">
                              <Border Background="{DynamicResource SolidBackgroundFillColorBase}" CornerRadius="8" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300">

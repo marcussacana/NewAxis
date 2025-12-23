@@ -9,6 +9,8 @@ using System;
 using SixLabors.ImageSharp.Processing;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.IO;
+using System.Text.Json.Serialization;
 
 namespace NewAxis.ViewModels;
 
@@ -25,18 +27,43 @@ public class MainViewModel : ViewModelBase
         get => _selectedGame;
         set
         {
+
             if (SetField(ref _selectedGame, value))
             {
-                OnPropertyChanged(nameof(SelectedMod));
                 if (_selectedGame != null && _selectedGame.SupportedMods.Count > 0)
                 {
-                    SelectedMod = _selectedGame.SupportedMods[0];
+                    var list = _selectedGame.SupportedMods;
+
+                    SupportedMods.Clear();
+                    foreach (var item in list)
+                        SupportedMods.Add(item);
+
+                    SelectedMod = list[0];
                 }
+
+                OnPropertyChanged(nameof(SelectedMod));
 
                 _ = LoadGameBannerAsync(_selectedGame);
 
                 LoadGameConfig(_selectedGame);
             }
+        }
+    }
+
+
+    private ObservableCollection<string> _supportedMods = new ObservableCollection<string>();
+    public ObservableCollection<string> SupportedMods
+    {
+        get
+        {
+            return _supportedMods;
+        }
+        set
+        {
+            if (_supportedMods == value) return;
+
+            _supportedMods = value;
+            OnPropertyChanged(nameof(SupportedMods));
         }
     }
 
@@ -606,6 +633,7 @@ public class MainViewModel : ViewModelBase
         List<ModType> mods = new List<ModType>();
         if (!string.IsNullOrEmpty(gameEntry.ShaderMod) && !string.IsNullOrEmpty(gameEntry.MigotoPath)) mods.Add(ModType.ThreeDUltra);
         if (!string.IsNullOrEmpty(gameEntry.ReshadePath)) mods.Add(ModType.ThreeDPlus);
+        if (!string.IsNullOrEmpty(gameEntry.NativeReshade)) mods.Add(ModType.Native);
 
         var game = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => new Game(gameName, "", mods) { Tag = gameEntry });
         if (gameEntry.Creator != null) game.Creator = gameEntry.Creator;
@@ -804,6 +832,8 @@ public class MainViewModel : ViewModelBase
             return;
         }
 
+        await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
+
         try
         {
             IsGameSessionActive = true;
@@ -867,13 +897,31 @@ public class MainViewModel : ViewModelBase
                 return;
             }
 
+            var acfPath = Path.Combine(Path.GetFullPath($"..\\..\\appmanifest_{gameEntry.SteamAppId}.acf", SelectedGame.InstallPath));
+
+            bool isSteamGame = File.Exists(acfPath);
+
             Debug.WriteLine($"Launching: {exePath}");
-            var process = Process.Start(new ProcessStartInfo
+
+            Process? process;
+            if (isSteamGame)
             {
-                FileName = exePath,
-                WorkingDirectory = System.IO.Path.GetDirectoryName(exePath),
-                UseShellExecute = true
-            });
+                //steam://run/570//-console -novid
+                process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "steam://run/" + gameEntry.SteamAppId,
+                    UseShellExecute = true
+                });
+            }
+            else
+            {
+                process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = exePath,
+                    WorkingDirectory = Path.GetDirectoryName(exePath),
+                    UseShellExecute = true
+                });
+            }
 
             if (process != null)
             {
@@ -884,7 +932,7 @@ public class MainViewModel : ViewModelBase
                 {
 
                     var gameDir = SelectedGame.InstallPath;
-                    var allExes = System.IO.Directory.GetFiles(gameDir!, "*.exe", System.IO.SearchOption.AllDirectories);
+                    var allExes = Directory.GetFiles(gameDir!, "*.exe", SearchOption.AllDirectories);
 
                     DateTime gameStartTime = DateTime.Now;
 
@@ -895,7 +943,7 @@ public class MainViewModel : ViewModelBase
 
                         // Detect any running process from the game folder
                         var childs = allExes
-                            .Select(path => System.IO.Path.GetFileNameWithoutExtension(path))
+                            .Select(path => Path.GetFileNameWithoutExtension(path))
                             .Where(name => !string.IsNullOrEmpty(name))
                             .SelectMany(name => Process.GetProcessesByName(name!))
                             .ToList();
@@ -1016,11 +1064,11 @@ public class MainViewModel : ViewModelBase
             string dirPath = game.InstallPath;
             if (game.Tag is GameIndexEntry gameEntry && !string.IsNullOrEmpty(gameEntry.RelativeExecutablePath))
             {
-                dirPath = System.IO.Path.Combine(game.InstallPath, gameEntry.RelativeExecutablePath);
+                dirPath = Path.Combine(game.InstallPath, gameEntry.RelativeExecutablePath);
             }
 
-            var iniPath = System.IO.Path.Combine(dirPath, "truegame.ini");
-            if (System.IO.File.Exists(iniPath))
+            var iniPath = Path.Combine(dirPath, "truegame.ini");
+            if (File.Exists(iniPath))
             {
                 var parser = new Services.IniFileParser();
                 parser.Load(iniPath);
