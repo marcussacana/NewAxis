@@ -5,7 +5,7 @@ namespace NewAxis;
 
 class Program
 {
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     [STAThread]
     public static void Main(string[] args)
