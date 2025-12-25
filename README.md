@@ -95,8 +95,8 @@ Notes:
 - Make sure you're using the correct mod type for your game
 
 ### Application Won't Start
-- Star the program with CMD line `NewAxis.exe > output.log`
-- Check the output.log file for errors
+- Star the program with CMD line `NewAxis.exe -log`
+- Check the NewAxis.log file for errors
 - Run as Administrator if you encounter permission issues
 
 ## License

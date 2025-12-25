@@ -52,7 +52,7 @@ namespace NewAxis.Services
 
         private static void ApplyUpdate(string targetDir)
         {
-            Console.WriteLine("Applying update...");
+            Trace.WriteLine("Applying update...");
 
             int retries = 10;
             string currentExe = Environment.ProcessPath!;
@@ -65,7 +65,7 @@ namespace NewAxis.Services
 
                     if (targetDir.TrimEnd('\\') == currentDir.TrimEnd('\\'))
                     {
-                        Console.WriteLine("Target and Source are same!");
+                        Trace.WriteLine("Target and Source are same!");
                         return;
                     }
 
@@ -81,11 +81,11 @@ namespace NewAxis.Services
                 {
                     Thread.Sleep(500);
                     retries--;
-                    Console.WriteLine($"Waiting for file locks... ({retries})");
+                    Trace.WriteLine($"Waiting for file locks... ({retries})");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Update failed: {ex.Message}");
+                    Trace.WriteLine($"Update failed: {ex.Message}");
                     Environment.Exit(1);
                 }
             }
@@ -158,7 +158,7 @@ namespace NewAxis.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Update initiation failed: {ex.Message}");
+                Trace.WriteLine($"Update initiation failed: {ex.Message}");
                 throw;
             }
         }

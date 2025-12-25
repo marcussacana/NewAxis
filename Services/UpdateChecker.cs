@@ -43,7 +43,7 @@ namespace NewAxis.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Update check failed: {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"Update check failed: {ex.Message}");
                 return null;
             }
         }

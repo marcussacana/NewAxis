@@ -34,5 +34,6 @@
     "ConnectionError": "Error de Conexión",
     "DisableDLSS": "Desactivar DLSS",
     "Search": "Buscar",
-    "SearchGames": "Buscar juegos..."
+    "SearchGames": "Buscar juegos...",
+    "GameRunning": "En ejecución..."
 }

@@ -84,7 +84,7 @@ public class LocalizationService : INotifyPropertyChanged
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Failed to load language file {file}: {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"Failed to load language file {file}: {ex.Message}");
                 }
             }
         }

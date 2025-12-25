@@ -61,7 +61,7 @@ namespace NewAxis.Services
                 fullExecutablePath = Path.Combine(gameInstallPath, executablePath);
             }
 
-            Console.WriteLine($"[ModInstaller] Installing {modType.GetDescription()} mod for {game.Name}...");
+            Trace.WriteLine($"[ModInstaller] Installing {modType.GetDescription()} mod for {game.Name}...");
 
             try
             {
@@ -81,7 +81,7 @@ namespace NewAxis.Services
 
                 if (!string.IsNullOrEmpty(gameEntry.ConfigArchivePath))
                 {
-                    Console.WriteLine($"[ModInstaller] Found ConfigArchive (Mode: {modType}), installing...");
+                    Trace.WriteLine($"[ModInstaller] Found ConfigArchive (Mode: {modType}), installing...");
                     var configLocalPath = await DownloadFileAsync(repoClient, gameEntry.ConfigArchivePath);
                     var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson);
                     installedFiles.AddRange(configFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
@@ -150,7 +150,7 @@ namespace NewAxis.Services
                         var backupPath = d3dxPath + ".disabled";
                         if (File.Exists(backupPath)) File.Delete(backupPath);
                         File.Move(d3dxPath, backupPath);
-                        Console.WriteLine($"[ModInstaller] Backed up d3dx.ini to .disabled");
+                        Trace.WriteLine($"[ModInstaller] Backed up d3dx.ini to .disabled");
                     }
 
                     var specialPath = HasUnicodeChars(targetDirectory);
@@ -160,13 +160,13 @@ namespace NewAxis.Services
                     if (!string.IsNullOrEmpty(gameEntry.D3DXSettings))
                     {
                         d3dxContent = gameEntry.D3DXSettings + "\r\n\r\n" + d3dxContent;
-                        Console.WriteLine($"[ModInstaller] Applied D3DXSettings override (Length: {gameEntry.D3DXSettings.Length})");
+                        Trace.WriteLine($"[ModInstaller] Applied D3DXSettings override (Length: {gameEntry.D3DXSettings.Length})");
                     }
 
                     if (!string.IsNullOrWhiteSpace(d3dxContent))
                     {
                         await File.WriteAllTextAsync(d3dxPath, d3dxContent, new UTF8Encoding(false));
-                        Console.WriteLine($"[ModInstaller] Generated d3dx.ini pointing to {targetDirectory}");
+                        Trace.WriteLine($"[ModInstaller] Generated d3dx.ini pointing to {targetDirectory}");
 
                         if (!installedFiles.Contains(d3dxRelPath))
                         {
@@ -178,11 +178,11 @@ namespace NewAxis.Services
                         try
                         {
                             File.Delete(d3dxPath);
-                            Console.WriteLine($"[ModInstaller] Deleted old d3dx.ini");
+                            Trace.WriteLine($"[ModInstaller] Deleted old d3dx.ini");
                         }
                         catch (Exception e)
                         {
-                            Console.WriteLine($"[ModInstaller] Failed to delete d3dx.ini: {e.Message}");
+                            Trace.WriteLine($"[ModInstaller] Failed to delete d3dx.ini: {e.Message}");
                         }
                     }
                 }
@@ -193,7 +193,7 @@ namespace NewAxis.Services
                         throw new Exception("NativeReshade or NativeReshadeDll not configured");
                     }
 
-                    Console.WriteLine($"[ModInstaller] Installing Native Reshade mode...");
+                    Trace.WriteLine($"[ModInstaller] Installing Native Reshade mode...");
                     var nativeReshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.NativeReshade);
                     var nativeFiles = await ReshadeExtractor.ExtractNativeReshadeAsync(new ReshadeExtractionContext
                     {
@@ -211,13 +211,13 @@ namespace NewAxis.Services
 
                 var filesListPath = Path.Combine(gameInstallPath, MOD_FILES_LIST);
                 await File.WriteAllLinesAsync(filesListPath, installedFiles);
-                Console.WriteLine($"[ModInstaller] Created {MOD_FILES_LIST} with {installedFiles.Count} entries");
+                Trace.WriteLine($"[ModInstaller] Created {MOD_FILES_LIST} with {installedFiles.Count} entries");
 
                 return installedFiles;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[ModInstaller] Error: {ex.Message}");
+                Trace.WriteLine($"[ModInstaller] Error: {ex.Message}");
                 throw;
             }
         }
@@ -239,7 +239,7 @@ namespace NewAxis.Services
                         File.Delete(backupPath);
                     }
                     File.Move(fullPath, backupPath);
-                    Console.WriteLine($"[ModInstaller] Disabled blacklisted file: {blacklistFile}");
+                    Trace.WriteLine($"[ModInstaller] Disabled blacklisted file: {blacklistFile}");
 
                     installedFiles.Add(Path.GetRelativePath(gameInstallPath, fullPath));
                 }
@@ -251,11 +251,11 @@ namespace NewAxis.Services
             var filesListPath = Path.Combine(gameInstallPath, MOD_FILES_LIST);
             if (!File.Exists(filesListPath))
             {
-                Console.WriteLine("[ModInstaller] No 3dfiles.txt found, nothing to uninstall");
+                Trace.WriteLine("[ModInstaller] No 3dfiles.txt found, nothing to uninstall");
                 return;
             }
 
-            Console.WriteLine("[ModInstaller] Restoring original files...");
+            Trace.WriteLine("[ModInstaller] Restoring original files...");
             var installedFiles = await File.ReadAllLinesAsync(filesListPath);
 
             foreach (var relativePath in installedFiles)
@@ -269,7 +269,7 @@ namespace NewAxis.Services
                     if (File.Exists(backupPath))
                     {
                         File.Copy(backupPath, fullPath, overwrite: true);
-                        Console.WriteLine($"[ModInstaller] Restored: {relativePath}");
+                        Trace.WriteLine($"[ModInstaller] Restored: {relativePath}");
 
                         if (deleteBackups)
                         {
@@ -279,14 +279,14 @@ namespace NewAxis.Services
                     else
                     {
                         File.Delete(fullPath);
-                        Console.WriteLine($"[ModInstaller] Deleted: {relativePath}");
+                        Trace.WriteLine($"[ModInstaller] Deleted: {relativePath}");
                     }
                 }
             }
 
 
             File.Delete(filesListPath);
-            Console.WriteLine("[ModInstaller] Mod uninstalled successfully");
+            Trace.WriteLine("[ModInstaller] Mod uninstalled successfully");
         }
 
         private static async Task<string> DownloadFileAsync(GameRepositoryClient repoClient, string urlOrPath)
@@ -320,11 +320,11 @@ namespace NewAxis.Services
 
                 if (File.Exists(mergePath) && allPartsCached)
                 {
-                    Console.WriteLine($"[ModInstaller] Using cached merged file: {finalFileName}");
+                    Trace.WriteLine($"[ModInstaller] Using cached merged file: {finalFileName}");
                     return mergePath;
                 }
 
-                Console.WriteLine($"[ModInstaller] Detected split file ({totalParts} parts). Downloading...");
+                Trace.WriteLine($"[ModInstaller] Detected split file ({totalParts} parts). Downloading...");
 
 
                 for (int i = 1; i <= totalParts; i++)
@@ -335,13 +335,13 @@ namespace NewAxis.Services
 
                     if (!File.Exists(partCachePath))
                     {
-                        Console.WriteLine($"  - Downloading part {i}/{totalParts}: {partCacheName}");
+                        Trace.WriteLine($"  - Downloading part {i}/{totalParts}: {partCacheName}");
                         await repoClient.DownloadFileAsync(partUrl, partCachePath);
                     }
                 }
 
 
-                Console.WriteLine($"[ModInstaller] Merging {totalParts} parts...");
+                Trace.WriteLine($"[ModInstaller] Merging {totalParts} parts...");
                 if (File.Exists(mergePath)) File.Delete(mergePath);
 
                 using (var destStream = new FileStream(mergePath, FileMode.Create, FileAccess.Write))
@@ -359,7 +359,7 @@ namespace NewAxis.Services
                     }
                 }
 
-                Console.WriteLine($"[ModInstaller] Merge complete: {mergePath}");
+                Trace.WriteLine($"[ModInstaller] Merge complete: {mergePath}");
                 return mergePath;
             }
             else
@@ -372,12 +372,12 @@ namespace NewAxis.Services
 
                 if (!File.Exists(cachePath))
                 {
-                    Console.WriteLine($"[ModInstaller] Downloading: {urlOrPath}");
+                    Trace.WriteLine($"[ModInstaller] Downloading: {urlOrPath}");
                     await repoClient.DownloadFileAsync(urlOrPath, cachePath);
                 }
                 else
                 {
-                    Console.WriteLine($"[ModInstaller] Using cached: {Path.GetFileName(urlOrPath)}");
+                    Trace.WriteLine($"[ModInstaller] Using cached: {Path.GetFileName(urlOrPath)}");
                 }
 
                 return cachePath;
@@ -412,11 +412,11 @@ namespace NewAxis.Services
 
 
             await File.WriteAllTextAsync(iniPath, defaultContent);
-            Console.WriteLine($"[ModInstaller] Created truegame.ini");
+            Trace.WriteLine($"[ModInstaller] Created truegame.ini");
 
             ApplyTrueGameSettings(settings, iniPath);
 
-            Console.WriteLine($"[ModInstaller] Updated truegame.ini: Depth={settings.Depth}, Popout={settings.Popout}");
+            Trace.WriteLine($"[ModInstaller] Updated truegame.ini: Depth={settings.Depth}, Popout={settings.Popout}");
 
             return;
         }

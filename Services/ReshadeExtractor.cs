@@ -8,7 +8,8 @@ using SharpCompress.Archives;
 using SharpCompress.Common;
 
 using NewAxis.Models;
-using System.Text; // Ensure we have Models namespace for GameIndexEntry
+using System.Text;
+using System.Diagnostics; // Ensure we have Models namespace for GameIndexEntry
 
 namespace NewAxis.Services
 {
@@ -132,7 +133,7 @@ namespace NewAxis.Services
             string archFolder = is64Bit ? "x64" : "x32";
             string archFolderPrefix = $"{archFolder}/";
 
-            Console.WriteLine($"[ReshadeManager] Detected architecture: {archFolder}");
+            Trace.WriteLine($"[ReshadeManager] Detected architecture: {archFolder}");
 
             await Task.Run(() =>
             {
@@ -147,7 +148,7 @@ namespace NewAxis.Services
                         throw new Exception($"No files found in {archFolder} folder of archive");
                     }
 
-                    Console.WriteLine($"[ReshadeManager] Extracting {filesToExtract.Count} files from {archFolder}...");
+                    Trace.WriteLine($"[ReshadeManager] Extracting {filesToExtract.Count} files from {archFolder}...");
 
                     foreach (var entry in filesToExtract)
                     {
@@ -192,13 +193,13 @@ namespace NewAxis.Services
                 if (fileName.Contains("reshade", StringComparison.OrdinalIgnoreCase) || dllFiles.Length == 1)
                 {
                     targetPath = Path.Combine(targetDir, targetDllName);
-                    Console.WriteLine($"[ReshadeManager] Copying and renaming {fileName} -> {targetDllName}");
+                    Trace.WriteLine($"[ReshadeManager] Copying and renaming {fileName} -> {targetDllName}");
                 }
                 else
                 {
                     // Keep original name for supporting DLLs
                     targetPath = Path.Combine(targetDir, fileName);
-                    Console.WriteLine($"[ReshadeManager] Copying {fileName}");
+                    Trace.WriteLine($"[ReshadeManager] Copying {fileName}");
                 }
 
                 File.Copy(srcDll, targetPath, true);

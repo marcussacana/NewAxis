@@ -16,7 +16,7 @@ namespace NewAxis.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
-    public const string REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
+    public string REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
     public LocalizationService Localization => LocalizationService.Instance;
 
     public ObservableCollection<Game> Games { get; } = new();
@@ -77,23 +77,23 @@ public class MainViewModel : ViewModelBase
             {
                 if (!string.IsNullOrEmpty(indexEntry.Images.Wallpaper))
                 {
-                    Debug.WriteLine($"Downloading banner for {game.Name}");
+                    Trace.WriteLine($"Downloading banner for {game.Name}");
                     game.BannerImage = await LoadImageAsync(indexEntry.Images.Wallpaper);
                 }
 
                 if (!string.IsNullOrEmpty(indexEntry.Images.Logo))
                 {
-                    Debug.WriteLine($"Downloading logo for {game.Name}");
+                    Trace.WriteLine($"Downloading logo for {game.Name}");
                     var logoImg = await LoadImageAsync(indexEntry.Images.Logo, autoCropTransparency: true, gameInstance: game);
                     game.LogoImage = logoImg;
                 }
 
-                Debug.WriteLine($"Images loaded for {game.Name}");
+                Trace.WriteLine($"Images loaded for {game.Name}");
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error loading images: {ex.Message}");
+            Trace.WriteLine($"Error loading images: {ex.Message}");
         }
     }
 
@@ -105,7 +105,7 @@ public class MainViewModel : ViewModelBase
 
             return await Task.Run(() =>
             {
-                Debug.WriteLine($"Loading image for {url}");
+                Trace.WriteLine($"Loading image for {url}");
                 using (var inputStream = new System.IO.MemoryStream(imageBytes))
                 using (var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(inputStream))
                 {
@@ -130,7 +130,7 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error loading image from {url}: {ex.Message}");
+            Trace.WriteLine($"Error loading image from {url}: {ex.Message}");
             return null;
         }
     }
@@ -191,14 +191,14 @@ public class MainViewModel : ViewModelBase
                 {
                     var cropRect = new SixLabors.ImageSharp.Rectangle(0, top, width, newHeight);
                     rgba32Image.Mutate(x => x.Crop(cropRect));
-                    Debug.WriteLine($"Logo cropped: removed {top}px top, {height - bottom - 1}px bottom");
+                    Trace.WriteLine($"Logo cropped: removed {top}px top, {height - bottom - 1}px bottom");
                 }
 
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error autocropping transparency: {ex.Message}");
+            Trace.WriteLine($"Error autocropping transparency: {ex.Message}");
         }
     }
 
@@ -209,7 +209,7 @@ public class MainViewModel : ViewModelBase
             var rgba32Image = image as SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>;
             if (rgba32Image == null)
             {
-                Debug.WriteLine("Failed to analyze image brightness: Image is null");
+                Trace.WriteLine("Failed to analyze image brightness: Image is null");
                 return;
             }
 
@@ -254,7 +254,7 @@ public class MainViewModel : ViewModelBase
                                 OffsetY = 0
                             };
                         });
-                        Debug.WriteLine($"Logo analyzed as DARK (Ratio: {darkRatio:P1}). Shadow set to White.");
+                        Trace.WriteLine($"Logo analyzed as DARK (Ratio: {darkRatio:P1}). Shadow set to White.");
                     }
                     else
                     {
@@ -269,14 +269,14 @@ public class MainViewModel : ViewModelBase
                                 OffsetY = 0
                             };
                         });
-                        Debug.WriteLine($"Logo analyzed as BRITE (Ratio: {1 - darkRatio:P1}). Shadow set to Black.");
+                        Trace.WriteLine($"Logo analyzed as BRITE (Ratio: {1 - darkRatio:P1}). Shadow set to Black.");
                     }
                 }
             });
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error analyzing brightness: {ex.Message}");
+            Trace.WriteLine($"Error analyzing brightness: {ex.Message}");
         }
     }
 
@@ -419,7 +419,7 @@ public class MainViewModel : ViewModelBase
                 Localization.CurrentLanguage = value;
                 OnPropertyChanged(nameof(SelectedLanguage));
                 OnPropertyChanged(nameof(Localization));
-                Debug.WriteLine($"Language changed to {value}");
+                Trace.WriteLine($"Language changed to {value}");
             }
         }
     }
@@ -430,10 +430,11 @@ public class MainViewModel : ViewModelBase
 
     public MainViewModel()
     {
+        LoadConfig();
+
         _allGames = new List<Game>();
         _repoClient = new GameRepositoryClient(REPO_BASE);
 
-        LoadConfig();
         RefreshGamesList();
 
         _ = LoadGamesFromRepositoryAsync();
@@ -470,7 +471,7 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Update check error: {ex.Message}");
+            Trace.WriteLine($"Update check error: {ex.Message}");
         }
     }
 
@@ -503,7 +504,7 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Update failed: {ex.Message}");
+            Trace.WriteLine($"Update failed: {ex.Message}");
         }
     }
 
@@ -530,7 +531,7 @@ public class MainViewModel : ViewModelBase
 
             var index = await _repoClient.GetGameIndexAsync();
 
-            Debug.WriteLine($"Loaded {index.TotalGames} games from repository");
+            Trace.WriteLine($"Loaded {index.TotalGames} games from repository");
 
             var notFoundGames = new List<Game>();
 
@@ -590,7 +591,7 @@ public class MainViewModel : ViewModelBase
                         }
                         catch (Exception ex)
                         {
-                            Debug.WriteLine($"Error processing game {gameEntry.GameName}: {ex.Message}");
+                            Trace.WriteLine($"Error processing game {gameEntry.GameName}: {ex.Message}");
                         }
                     }
                 });
@@ -606,22 +607,13 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error loading games from repository: {ex.Message}");
+            Trace.WriteLine($"Error loading games from repository: {ex.Message}");
 
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                ProgressOverlayMessage = Localization["ConnectionError"];
-                IsProgressOverlayError = true;
-                IsProgressOverlayVisible = true;
-            });
+            SetLoadingOverlay(true, Localization["ConnectionError"], true);
 
             await Task.Delay(3000);
 
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                IsProgressOverlayVisible = false;
-                IsProgressOverlayError = false;
-            });
+            SetLoadingOverlay(false, null, false);
 
             RefreshGamesList();
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
@@ -644,7 +636,7 @@ public class MainViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(detectedPath))
             {
                 game.InstallPath = detectedPath;
-                Debug.WriteLine($"Auto-detected path for {game.Name}: {detectedPath}");
+                Trace.WriteLine($"Auto-detected path for {game.Name}: {detectedPath}");
             }
         }
 
@@ -669,6 +661,9 @@ public class MainViewModel : ViewModelBase
             string? disableDlss = _iniParser.GetValue("Settings", "DisableDLSS");
             if (bool.TryParse(disableDlss, out bool bDisableDlss)) DisableDLSS = bDisableDlss;
 
+            string? repoOverride = _iniParser.GetValue("Settings", "RepoOverride");
+            if (!string.IsNullOrEmpty(repoOverride)) REPO_BASE = repoOverride;
+
             LoadHotkey("DepthInc", (d, k, m) => { HotkeyDepthInc = d; KeyDepthInc = k; ModDepthInc = m; });
             LoadHotkey("DepthDec", (d, k, m) => { HotkeyDepthDec = d; KeyDepthDec = k; ModDepthDec = m; });
             LoadHotkey("PopoutInc", (d, k, m) => { HotkeyPopoutInc = d; KeyPopoutInc = k; ModPopoutInc = m; });
@@ -676,7 +671,7 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error loading config: {ex.Message}");
+            Trace.WriteLine($"Error loading config: {ex.Message}");
         }
     }
     void LoadHotkey(string prefix, Action<string, Key, KeyModifiers> setter)
@@ -723,7 +718,7 @@ public class MainViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error saving config: {ex.Message}");
+            Trace.WriteLine($"Error saving config: {ex.Message}");
         }
     }
 
@@ -822,21 +817,21 @@ public class MainViewModel : ViewModelBase
 
         if (SelectedGame == null || string.IsNullOrEmpty(SelectedGame.InstallPath))
         {
-            Debug.WriteLine("No game selected or game not installed");
+            Trace.WriteLine("No game selected or game not installed");
             return;
         }
 
         if (!(SelectedGame.Tag is GameIndexEntry gameEntry))
         {
-            Debug.WriteLine("Game metadata not available");
+            Trace.WriteLine("Game metadata not available");
             return;
         }
 
-        await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
+        IsGameSessionActive = true;
 
         try
         {
-            IsGameSessionActive = true;
+            await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
 
             if (!string.IsNullOrEmpty(SelectedMod) && _repoClient != null)
             {
@@ -872,27 +867,20 @@ public class MainViewModel : ViewModelBase
                 }
                 else
                 {
-                    Debug.WriteLine($"Unknown mod type selected: {SelectedMod}");
+                    Trace.WriteLine($"Unknown mod type selected: {SelectedMod}");
                 }
-
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    IsProgressOverlayVisible = false;
-                });
             }
-
 
             SyncTrueGameIni(SelectedGame);
 
-
-            var exePath = System.IO.Path.Combine(
+            var exePath = Path.Combine(
                 SelectedGame.InstallPath,
                 gameEntry.RelativeExecutablePath ?? "",
                 gameEntry.ExecutablePath ?? "");
 
-            if (!System.IO.File.Exists(exePath))
+            if (!File.Exists(exePath))
             {
-                Debug.WriteLine($"Executable not found: {exePath}");
+                Trace.WriteLine($"Executable not found: {exePath}");
                 IsGameSessionActive = false;
                 return;
             }
@@ -901,7 +889,7 @@ public class MainViewModel : ViewModelBase
 
             bool isSteamGame = File.Exists(acfPath);
 
-            Debug.WriteLine($"Launching: {exePath}");
+            Trace.WriteLine($"Launching: {exePath}, IsSteamGame: {isSteamGame}");
 
             Process? process;
             if (isSteamGame)
@@ -925,72 +913,102 @@ public class MainViewModel : ViewModelBase
 
             if (process != null)
             {
+                if (!isSteamGame)
+                {
+                    SetLoadingOverlay(false);
+                }
 
-                await Task.Run(() => process.WaitForExit());
+                await process.WaitForExitAsync();
+
+                if (isSteamGame)
+                {
+                    SetLoadingOverlay(false);
+                }
+
+                await WaitGameExit();
 
                 if (InstallModTemporarily && !string.IsNullOrEmpty(SelectedMod))
                 {
-
-                    var gameDir = SelectedGame.InstallPath;
-                    var allExes = Directory.GetFiles(gameDir!, "*.exe", SearchOption.AllDirectories);
-
-                    DateTime gameStartTime = DateTime.Now;
-
-                    while (true)
-                    {
-                        var runningTime = DateTime.Now - gameStartTime;
-                        await Task.Delay(runningTime > TimeSpan.FromMinutes(1) ? 1000 : 10000);
-
-                        // Detect any running process from the game folder
-                        var childs = allExes
-                            .Select(path => Path.GetFileNameWithoutExtension(path))
-                            .Where(name => !string.IsNullOrEmpty(name))
-                            .SelectMany(name => Process.GetProcessesByName(name!))
-                            .ToList();
-
-                        if (!childs.Any())
-                            break;
-
-                        await Task.WhenAll(childs.Select(x => x.WaitForExitAsync()));
-                    }
-
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        ProgressOverlayMessage = Localization["RestoringData"];
-                        IsProgressOverlayVisible = true;
-                    });
+                    SetLoadingOverlay(true, Localization["RestoringData"]);
 
                     await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
-                    Debug.WriteLine("Temporary mod uninstalled");
+                    Trace.WriteLine("Temporary mod uninstalled");
 
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        IsProgressOverlayVisible = false;
-                    });
+                    SetLoadingOverlay(false);
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error starting game: {ex.Message}");
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                IsProgressOverlayVisible = false;
-            });
+            Trace.WriteLine($"Error starting game: {ex.Message}");
+            SetLoadingOverlay(false);
         }
         finally
         {
+            Trace.WriteLine("Game session ended");
             IsGameSessionActive = false;
 
             if (ShutdownRequested)
             {
-                Debug.WriteLine("Shutdown was requested during game session. Exiting now.");
+                Trace.WriteLine("Shutdown was requested during game session. Exiting now.");
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     RequestShutdownAction?.Invoke();
                 });
             }
         }
+    }
+
+    private void SetLoadingOverlay(bool overlayVisible, string Status = null, bool isError = false)
+    {
+        Trace.WriteLine($"SetLoadingOverlay: {overlayVisible}, {(Status ?? "NULL")}");
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+        {
+            if (Status != null)
+            {
+                ProgressOverlayMessage = Status;
+            }
+
+            if (!overlayVisible)
+            {
+                await Task.Delay(3000);
+            }
+
+            IsProgressOverlayVisible = overlayVisible;
+            IsProgressOverlayError = isError;
+        });
+    }
+
+    private async Task WaitGameExit()
+    {
+        var gameDir = SelectedGame!.InstallPath;
+        if (string.IsNullOrEmpty(gameDir)) return;
+
+        var allExes = Directory.GetFiles(gameDir, "*.exe", SearchOption.AllDirectories);
+        DateTime gameStartTime = DateTime.Now;
+
+        while (true)
+        {
+            var runningTime = (DateTime.Now - gameStartTime).TotalMinutes;
+            await Task.Delay(runningTime > 1 ? 1000 : 10000);
+
+            // Detect any running process from the game folder
+            var processes = allExes
+                .Select(path => Path.GetFileNameWithoutExtension(path))
+                .Where(name => !string.IsNullOrEmpty(name))
+                .Where(name => !name.Contains("WebHelper", StringComparison.OrdinalIgnoreCase))
+                .Where(name => !name.Contains("CrashReport", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(name => Process.GetProcessesByName(name!))
+                .ToList();
+
+            if (processes.Count == 0)
+                break;
+
+
+            await Task.WhenAll(processes.Select(x => x.WaitForExitAsync()));
+        }
+
+        Trace.WriteLine("Game exited");
     }
 
     public event Func<Task<string?>>? RequestBrowseFolder;
@@ -1007,7 +1025,7 @@ public class MainViewModel : ViewModelBase
                 SaveConfig();
             }
         }
-        Debug.WriteLine($"Browsing for {SelectedGame?.Name}");
+        Trace.WriteLine($"Browsing for {SelectedGame?.Name}");
     }
 
     private void ExecuteRemoveGame(object? obj)
@@ -1085,12 +1103,12 @@ public class MainViewModel : ViewModelBase
                     Popout = p;
                 }
 
-                Debug.WriteLine($"Loaded config for {game.Name}: Depth={Depth}, Popout={Popout}");
+                Trace.WriteLine($"Loaded config for {game.Name}: Depth={Depth}, Popout={Popout}");
             }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Error loading game config: {ex.Message}");
+            Trace.WriteLine($"Error loading game config: {ex.Message}");
         }
     }
 
@@ -1103,13 +1121,18 @@ public class MainViewModel : ViewModelBase
             string dirPath = game.InstallPath;
             if (game.Tag is GameIndexEntry gameEntry && !string.IsNullOrEmpty(gameEntry.RelativeExecutablePath))
             {
-                dirPath = System.IO.Path.Combine(game.InstallPath, gameEntry.RelativeExecutablePath);
+                dirPath = Path.Combine(game.InstallPath, gameEntry.RelativeExecutablePath);
             }
 
-            var iniPath = System.IO.Path.Combine(dirPath, "truegame.ini");
-            if (!System.IO.File.Exists(iniPath)) return;
+            var iniPath = Path.Combine(dirPath, "truegame.ini");
 
-            var parser = new Services.IniFileParser();
+            if (!File.Exists(iniPath))
+            {
+                Trace.WriteLine($"truegame.ini not found for {game.Name}");
+                return;
+            }
+
+            var parser = new IniFileParser();
             parser.Load(iniPath);
 
             // Helper to format: Code,Alt,Ctrl,Shift
@@ -1132,11 +1155,11 @@ public class MainViewModel : ViewModelBase
             parser.SetValue("DEPTH", "Popout", ((int)Popout).ToString());
 
             parser.Save(iniPath);
-            Debug.WriteLine("Synced config to truegame.ini");
+            Trace.WriteLine("Synced config to truegame.ini");
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Failed to sync truegame.ini: {ex.Message}");
+            Trace.WriteLine($"Failed to sync truegame.ini: {ex.Message}");
         }
     }
 

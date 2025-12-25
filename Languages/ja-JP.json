@@ -34,5 +34,6 @@
     "ConnectionError": "接続エラー",
     "DisableDLSS": "DLSSを無効にする",
     "Search": "検索",
-    "SearchGames": "ゲームを検索..."
+    "SearchGames": "ゲームを検索...",
+    "GameRunning": "実行中..."
 }

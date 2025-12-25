@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -44,7 +45,7 @@ namespace NewAxis.Services
 
             try
             {
-                Console.WriteLine("[Migoto] Extracting archive...");
+                Trace.WriteLine("[Migoto] Extracting archive...");
                 using (var archive = ArchiveFactory.Open(migoto7zPath))
                 {
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
@@ -75,12 +76,12 @@ namespace NewAxis.Services
 
                 if (subDir.All(x => new[] { "x64", "x32" }.Contains(Path.GetFileName(x), StringComparer.OrdinalIgnoreCase)) && subDir.Any())
                 {
-                    Console.WriteLine("[Migoto] Found architecture-specific subdirectories (x64/x32)");
+                    Trace.WriteLine("[Migoto] Found architecture-specific subdirectories (x64/x32)");
 
 
                     if (string.IsNullOrEmpty(executablePath) || !File.Exists(executablePath))
                     {
-                        Console.WriteLine("[Migoto] Specific executable path not provided or not found, scanning directory...");
+                        Trace.WriteLine("[Migoto] Specific executable path not provided or not found, scanning directory...");
                         executablePath = Directory.GetFiles(targetDirectory, "*.exe", SearchOption.AllDirectories).FirstOrDefault();
                     }
 
@@ -92,7 +93,7 @@ namespace NewAxis.Services
 
                     var is64Bit = Is64bitExecutable(executablePath);
                     var archSubDir = is64Bit ? "x64" : "x32";
-                    Console.WriteLine($"[Migoto] Detected {(is64Bit ? "64-bit" : "32-bit")} executable, using {archSubDir} subdirectory");
+                    Trace.WriteLine($"[Migoto] Detected {(is64Bit ? "64-bit" : "32-bit")} executable, using {archSubDir} subdirectory");
 
 
                     sourceSubDir = subDir.FirstOrDefault(x => string.Equals(Path.GetFileName(x), archSubDir, StringComparison.OrdinalIgnoreCase));
@@ -105,30 +106,30 @@ namespace NewAxis.Services
 
                 if (jsonInstructionsPath != null)
                 {
-                    Console.WriteLine($"[Migoto] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
+                    Trace.WriteLine($"[Migoto] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
                     installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, sourceSubDir, targetDirectory);
                 }
                 else
                 {
 
-                    Console.WriteLine("[Migoto] No JSON instructions found, copying all files...");
+                    Trace.WriteLine("[Migoto] No JSON instructions found, copying all files...");
                     installedFiles = await CopyAllFilesAsync(sourceSubDir, targetDirectory);
                 }
 
                 if (installedFiles.Any(x => Path.GetFileName(x) == "nvapi64.dll"))
                 {
-                    Console.WriteLine("[Migoto] Found nvapi64.dll, checking for AMD GPU...");
+                    Trace.WriteLine("[Migoto] Found nvapi64.dll, checking for AMD GPU...");
 
                     if (GpuUtils.IsAmdGpu())
                     {
-                        Console.WriteLine("[Migoto] AMD GPU detected. Applying AMD fix to nvapi64.dll...");
+                        Trace.WriteLine("[Migoto] AMD GPU detected. Applying AMD fix to nvapi64.dll...");
 
                         var fullNvapiPath = installedFiles.First(x => Path.GetFileName(x) == "nvapi64.dll");
                         installedFiles.AddRange(await ApplyAMDfix(fullNvapiPath));
                     }
                 }
 
-                Console.WriteLine("[Migoto] Extraction complete!");
+                Trace.WriteLine("[Migoto] Extraction complete!");
                 return installedFiles;
             }
             finally
@@ -163,12 +164,12 @@ namespace NewAxis.Services
 
                         installedFiles.AddRange(archive.Entries.Select(e => Path.Combine(nvapiDir, e.Key!)));
                     }
-                    Console.WriteLine("[Migoto] AMD fix applied successfully.");
+                    Trace.WriteLine("[Migoto] AMD fix applied successfully.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Migoto] Failed to apply AMD fix: {ex.Message}");
+                Trace.WriteLine($"[Migoto] Failed to apply AMD fix: {ex.Message}");
             }
 
             return installedFiles.ToArray();
@@ -185,26 +186,26 @@ namespace NewAxis.Services
 
             if (instructions?.Files == null || instructions.Files.Count == 0)
             {
-                Console.WriteLine("[Migoto] No file instructions in JSON");
+                Trace.WriteLine("[Migoto] No file instructions in JSON");
                 return await CopyAllFilesAsync(sourceDir, targetDirectory);
             }
 
             Directory.CreateDirectory(targetDirectory);
 
-            Console.WriteLine($"[Migoto] Processing {instructions.Files.Count} file instructions...");
+            Trace.WriteLine($"[Migoto] Processing {instructions.Files.Count} file instructions...");
 
             foreach (var fileInstruction in instructions.Files)
             {
                 if (string.IsNullOrEmpty(fileInstruction.Source))
                 {
-                    Console.WriteLine("[Migoto] Skipping instruction with empty source");
+                    Trace.WriteLine("[Migoto] Skipping instruction with empty source");
                     continue;
                 }
 
                 var sourcePath = Path.Combine(sourceDir, fileInstruction.Source);
                 if (!File.Exists(sourcePath))
                 {
-                    Console.WriteLine($"[Migoto] Warning: Source file not found: {fileInstruction.Source}");
+                    Trace.WriteLine($"[Migoto] Warning: Source file not found: {fileInstruction.Source}");
                     continue;
                 }
 
@@ -237,12 +238,12 @@ namespace NewAxis.Services
                         if (!File.Exists(backupPath))
                         {
                             File.Copy(targetPath, backupPath, overwrite: false);
-                            Console.WriteLine($"[Migoto] Created backup: {Path.GetFileName(backupPath)}");
+                            Trace.WriteLine($"[Migoto] Created backup: {Path.GetFileName(backupPath)}");
                         }
                     }
 
                     File.Copy(sourcePath, targetPath, overwrite: true);
-                    Console.WriteLine($"[Migoto] {fileInstruction.Source} -> {targetName}");
+                    Trace.WriteLine($"[Migoto] {fileInstruction.Source} -> {targetName}");
                     installedFiles.Add(targetPath);
                 }
             }
@@ -256,7 +257,7 @@ namespace NewAxis.Services
             Directory.CreateDirectory(targetDirectory);
 
             var allFiles = Directory.GetFiles(sourceDir, "*.*", SearchOption.AllDirectories);
-            Console.WriteLine($"[Migoto] Copying {allFiles.Length} files...");
+            Trace.WriteLine($"[Migoto] Copying {allFiles.Length} files...");
 
             foreach (var file in allFiles)
             {
@@ -324,7 +325,7 @@ namespace NewAxis.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Migoto] Failed to detect executable architecture: {ex.Message}");
+                Trace.WriteLine($"[Migoto] Failed to detect executable architecture: {ex.Message}");
                 return false;
             }
         }

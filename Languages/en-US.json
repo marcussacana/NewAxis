@@ -34,5 +34,6 @@
   "ConnectionError": "Connection Error",
   "DisableDLSS": "Disable DLSS",
   "Search": "Search",
-  "SearchGames": "Search games..."
+  "SearchGames": "Search games...",
+  "GameRunning": "Running..."
 }

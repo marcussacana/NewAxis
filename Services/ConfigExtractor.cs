@@ -38,7 +38,7 @@ namespace NewAxis.Services
 
             try
             {
-                Console.WriteLine("[Config] Extracting archive...");
+                Trace.WriteLine("[Config] Extracting archive...");
                 using (var archive = ArchiveFactory.Open(config7zPath))
                 {
                     foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
@@ -67,16 +67,16 @@ namespace NewAxis.Services
 
                 if (jsonInstructionsPath != null)
                 {
-                    Console.WriteLine($"[Config] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
+                    Trace.WriteLine($"[Config] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
                     installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson);
                 }
                 else
                 {
-                    Console.WriteLine("[Config] No JSON instructions found, copying all files...");
+                    Trace.WriteLine("[Config] No JSON instructions found, copying all files...");
                     installedFiles = await CopyAllFilesAsync(tempExtractDir, targetDirectory);
                 }
 
-                Console.WriteLine($"[Config] Extraction complete! {installedFiles.Count} files installed.");
+                Trace.WriteLine($"[Config] Extraction complete! {installedFiles.Count} files installed.");
                 return installedFiles;
             }
             finally
@@ -106,7 +106,7 @@ namespace NewAxis.Services
                 var rootList = JsonSerializer.Deserialize(jsonContent, AppJsonContext.Default.ListRoot);
                 if (rootList != null && rootList.Count > 0)
                 {
-                    Console.WriteLine("[Config] Found valid T configuration definitions. Processing instructions.");
+                    Trace.WriteLine("[Config] Found valid T configuration definitions. Processing instructions.");
 
                     // Parse Overrides if present
                     List<GameSettingOverride>? overrides = null;
@@ -115,11 +115,11 @@ namespace NewAxis.Services
                         try
                         {
                             overrides = JsonSerializer.Deserialize(settingsOverridesJson, AppJsonContext.Default.ListGameSettingOverride);
-                            if (overrides != null) Console.WriteLine($"[Config] Loaded {overrides.Count} settings overrides.");
+                            if (overrides != null) Trace.WriteLine($"[Config] Loaded {overrides.Count} settings overrides.");
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine($"[Config] Failed to parse settings overrides: {ex.Message}");
+                            Trace.WriteLine($"[Config] Failed to parse settings overrides: {ex.Message}");
                         }
                     }
 
@@ -150,12 +150,12 @@ namespace NewAxis.Services
                                         }
                                         catch (Exception ex)
                                         {
-                                            Console.WriteLine($"[Config] Registry error: {ex.Message}");
+                                            Trace.WriteLine($"[Config] Registry error: {ex.Message}");
                                         }
                                     }
                                     else
                                     {
-                                        Console.WriteLine($"[Config] Skipping Registry settings on non-Windows platform: {targetPresetPath}");
+                                        Trace.WriteLine($"[Config] Skipping Registry settings on non-Windows platform: {targetPresetPath}");
                                     }
                                     continue;
                                 }
@@ -198,10 +198,10 @@ namespace NewAxis.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Config] T format parsing failed: {ex.Message}");
+                Trace.WriteLine($"[Config] T format parsing failed: {ex.Message}");
             }
 
-            Console.WriteLine("[Config] Invalid or empty instruction file, falling back to copy all.");
+            Trace.WriteLine("[Config] Invalid or empty instruction file, falling back to copy all.");
             return await CopyAllFilesAsync(sourceDir, targetDirectory);
         }
 
@@ -224,7 +224,7 @@ namespace NewAxis.Services
                 }
                 else
                 {
-                    Console.WriteLine("[Config] Setting not found: " + setting.GameSettingId);
+                    Trace.WriteLine("[Config] Setting not found: " + setting.GameSettingId);
                 }
             }
 
@@ -481,7 +481,7 @@ namespace NewAxis.Services
 
             if (baseKey == null)
             {
-                Console.WriteLine($"[Config] Unknown registry root: {rootKeyName}");
+                Trace.WriteLine($"[Config] Unknown registry root: {rootKeyName}");
                 return;
             }
 
@@ -489,11 +489,11 @@ namespace NewAxis.Services
             {
                 if (key == null)
                 {
-                    Console.WriteLine($"[Config] Failed to create/open registry key: {registryPath}");
+                    Trace.WriteLine($"[Config] Failed to create/open registry key: {registryPath}");
                     return;
                 }
 
-                Console.WriteLine($"[Config] Writing to Registry: {registryPath}");
+                Trace.WriteLine($"[Config] Writing to Registry: {registryPath}");
 
                 // Apply DefaultPreset if exists (assuming it's a list of values? No, usually DefaultPreset is a string file content)
                 // For Reg mode, we iterate Children/Overrides instead.
@@ -590,12 +590,12 @@ namespace NewAxis.Services
                 if (valueToWrite != null)
                 {
                     key.SetValue(valueName, valueToWrite, kind);
-                    Console.WriteLine($"[Config] Set REG {valueName} = {valueToWrite} ({kind})");
+                    Trace.WriteLine($"[Config] Set REG {valueName} = {valueToWrite} ({kind})");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Config] Error setting registry value {valueName}: {ex.Message}");
+                Trace.WriteLine($"[Config] Error setting registry value {valueName}: {ex.Message}");
             }
         }
     }

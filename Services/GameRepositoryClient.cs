@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
@@ -28,9 +29,13 @@ namespace NewAxis.Services
             {
                 _httpClient = new HttpClient();
             }
+            else
+            {
+                _baseUrl = Path.GetFullPath(_baseUrl);
+            }
 
-            Console.WriteLine($"Repository Mode: {(_isLocalPath ? "LOCAL" : "HTTP")}");
-            Console.WriteLine($"Base Path: {_baseUrl}");
+            Trace.WriteLine($"Repository Mode: {(_isLocalPath ? "LOCAL" : "HTTP")}");
+            Trace.WriteLine($"Base Path: {_baseUrl}");
         }
 
         public async Task<GameIndex> GetGameIndexAsync()
@@ -40,17 +45,17 @@ namespace NewAxis.Services
             if (_isLocalPath)
             {
                 var indexPath = Path.Combine(_baseUrl, "index.json");
-                Console.WriteLine($"Reading local index: {indexPath}");
+                Trace.WriteLine($"Reading local index: {indexPath}");
                 json = await File.ReadAllTextAsync(indexPath);
             }
             else
             {
                 var indexUrl = $"{_baseUrl}/index.json";
-                Console.WriteLine($"Downloading index: {indexUrl}");
+                Trace.WriteLine($"Downloading index: {indexUrl}");
                 json = await _httpClient!.GetStringAsync(indexUrl);
             }
 
-            Console.WriteLine("Parsing index data");
+            Trace.WriteLine("Parsing index data");
             return JsonSerializer.Deserialize(json, AppJsonContext.Default.GameIndex)!;
         }
 
@@ -74,7 +79,7 @@ namespace NewAxis.Services
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"Local image not found: {fullLocalPath}");
+                        Trace.WriteLine($"Local image not found: {fullLocalPath}");
                         return Array.Empty<byte>();
                     }
                 }
@@ -120,7 +125,7 @@ namespace NewAxis.Services
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Download failed for {sourceUrl}: {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"Download failed for {sourceUrl}: {ex.Message}");
                 throw;
             }
         }
@@ -141,13 +146,13 @@ namespace NewAxis.Services
             if (_isLocalPath)
             {
                 var sourcePath = Path.Combine(_baseUrl, relativeUrl);
-                Console.WriteLine($"Copying local file: {sourcePath}");
+                Trace.WriteLine($"Copying local file: {sourcePath}");
                 bytes = await File.ReadAllBytesAsync(sourcePath);
             }
             else
             {
                 var fullUrl = $"{_baseUrl}/{relativeUrl}";
-                Console.WriteLine($"Downloading file: {fullUrl}");
+                Trace.WriteLine($"Downloading file: {fullUrl}");
                 bytes = await _httpClient!.GetByteArrayAsync(fullUrl);
             }
 

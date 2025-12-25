@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 
 namespace NewAxis.Services
@@ -21,7 +22,7 @@ namespace NewAxis.Services
                 var nvidiaDlls = new[] { "nvapi64.dll", "nvapi.dll" };
                 bool hasNvidia = nvidiaDlls.Any(dll => System.IO.File.Exists(System.IO.Path.Combine(system32, dll)));
 
-                Console.WriteLine($"[GpuUtils] DLL Detection: HasAMD={hasAmd}, HasNVIDIA={hasNvidia}");
+                Trace.WriteLine($"[GpuUtils] DLL Detection: HasAMD={hasAmd}, HasNVIDIA={hasNvidia}");
 
                 if (hasAmd && hasNvidia)
                 {
@@ -32,7 +33,7 @@ namespace NewAxis.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[GpuUtils] GPU Detection by DLL failed: {ex.Message}");
+                Trace.WriteLine($"[GpuUtils] GPU Detection by DLL failed: {ex.Message}");
                 return false;
             }
         }

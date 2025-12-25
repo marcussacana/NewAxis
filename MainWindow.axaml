@@ -201,6 +201,15 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        <!-- Game Running Overlay -->
+                        <Border Grid.RowSpan="2" Background="#AA000000" IsVisible="{Binding IsGameSessionActive}">
+                             <Border Background="{DynamicResource SolidBackgroundFillColorBase}" CornerRadius="8" Padding="30" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                 <StackPanel Spacing="20">
+                                     <TextBlock Text="{Binding Localization[GameRunning]}" FontSize="24" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                                 </StackPanel>
+                             </Border>
+                        </Border>
+
                         <!-- Update Overlay -->
                         <Border Grid.RowSpan="2" Background="#AA000000" IsVisible="{Binding ShowUpdatePrompt}">
                              <Border Background="{DynamicResource SolidBackgroundFillColorBase}" CornerRadius="8" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300">
