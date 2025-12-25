@@ -203,6 +203,8 @@ namespace NewAxis.Services
         public string? D3DXSettings { get; set; }
         public string? NativeReshade { get; set; }
         public string? NativeReshadeDll { get; set; }
+        public string? StartArgsUltra { get; set; }
+        public string? StartArgsPlus { get; set; }
 
         public ImageUrls? Images { get; set; }
         public string? ConfigArchivePath { get; set; }

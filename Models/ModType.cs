@@ -22,7 +22,7 @@ public static class ModTypeExtensions
         };
     }
 
-    public static ModType? FromDescription(string description)
+    public static ModType? FromDescription(string? description)
     {
         return description switch
         {

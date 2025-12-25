@@ -827,6 +827,8 @@ public class MainViewModel : ViewModelBase
             return;
         }
 
+        ModType? modType = ModTypeExtensions.FromDescription(SelectedMod);
+
         IsGameSessionActive = true;
 
         try
@@ -835,11 +837,7 @@ public class MainViewModel : ViewModelBase
 
             if (!string.IsNullOrEmpty(SelectedMod) && _repoClient != null)
             {
-                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    ProgressOverlayMessage = Localization["DownloadingData"];
-                    IsProgressOverlayVisible = true;
-                });
+                SetLoadingOverlay(true, Localization["DownloadingData"]);
 
                 var settings = new ModInstallationSettings
                 {
@@ -852,16 +850,13 @@ public class MainViewModel : ViewModelBase
                     PopoutDec = new HotkeyDefinition { Key = KeyPopoutDec, Modifiers = ModPopoutDec }
                 };
 
-                if (ModTypeExtensions.FromDescription(SelectedMod) is ModType modType)
+                if (modType != null)
                 {
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        ProgressOverlayMessage = Localization["PreparingData"];
-                    });
+                    SetLoadingOverlay(true, Localization["PreparingData"]);
 
                     await ModInstaller.InstallModAsync(
                         SelectedGame,
-                        modType,
+                        modType!.Value,
                         _repoClient,
                         settings);
                 }
@@ -891,24 +886,49 @@ public class MainViewModel : ViewModelBase
 
             Trace.WriteLine($"Launching: {exePath}, IsSteamGame: {isSteamGame}");
 
+            string? launchArgs = modType switch
+            {
+                ModType.ThreeDUltra => gameEntry.StartArgsUltra,
+                ModType.ThreeDPlus => gameEntry.StartArgsPlus,
+                _ => null
+            };
+
+            if (!string.IsNullOrEmpty(launchArgs))
+            {
+                Trace.WriteLine($"Using launch arguments: {launchArgs}");
+            }
+
             Process? process;
             if (isSteamGame)
             {
-                //steam://run/570//-console -novid
+                var steamUrl = "steam://run/" + gameEntry.SteamAppId;
+
+                if (!string.IsNullOrEmpty(launchArgs))
+                {
+                    steamUrl += "//" + launchArgs;
+                }
+
                 process = Process.Start(new ProcessStartInfo
                 {
-                    FileName = "steam://run/" + gameEntry.SteamAppId,
+                    FileName = steamUrl,
                     UseShellExecute = true
                 });
             }
             else
             {
-                process = Process.Start(new ProcessStartInfo
+                var startInfo = new ProcessStartInfo
                 {
                     FileName = exePath,
                     WorkingDirectory = Path.GetDirectoryName(exePath),
                     UseShellExecute = true
-                });
+                };
+
+                if (!string.IsNullOrEmpty(launchArgs))
+                {
+                    startInfo.Arguments = launchArgs;
+                }
+
+                process = Process.Start(startInfo);
             }
 
             if (process != null)
