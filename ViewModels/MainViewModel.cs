@@ -876,8 +876,20 @@ public class MainViewModel : ViewModelBase
             if (!File.Exists(exePath))
             {
                 Trace.WriteLine($"Executable not found: {exePath}");
-                IsGameSessionActive = false;
-                return;
+
+                var otherExes = Directory.GetFiles(SelectedGame.InstallPath, Path.GetFileName(exePath), SearchOption.AllDirectories);
+
+                if (otherExes.Length > 0)
+                {
+                    exePath = otherExes.First();
+                    Trace.WriteLine($"Found hinted executable: {exePath}");
+                }
+                else
+                {
+
+                    IsGameSessionActive = false;
+                    return;
+                }
             }
 
             var acfPath = Path.Combine(Path.GetFullPath($"..\\..\\appmanifest_{gameEntry.SteamAppId}.acf", SelectedGame.InstallPath));
