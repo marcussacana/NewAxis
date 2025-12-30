@@ -24,7 +24,8 @@ namespace NewAxis.Services
         public static async Task<List<string>> ExtractConfigAsync(
             string config7zPath,
             string targetDirectory,
-            string? settingsOverridesJson = null)
+            string? settingsOverridesJson = null,
+            string? appId = null)
         {
             if (!File.Exists(config7zPath))
             {
@@ -68,7 +69,7 @@ namespace NewAxis.Services
                 if (jsonInstructionsPath != null)
                 {
                     Trace.WriteLine($"[Config] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
-                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson);
+                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson, appId);
                 }
                 else
                 {
@@ -96,7 +97,8 @@ namespace NewAxis.Services
             string jsonPath,
             string sourceDir,
             string targetDirectory,
-            string? settingsOverridesJson)
+            string? settingsOverridesJson,
+            string? appId)
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
@@ -127,6 +129,8 @@ namespace NewAxis.Services
                     foreach (var root in rootList.Where(x => x != null))
                     {
                         if (string.IsNullOrEmpty(root.Name) && root.ConfigFilePaths == null) continue;
+
+                        ModInstaller.InjectCustomConfigs(appId, root, overrides);
 
                         if (root.ConfigFilePaths != null)
                         {
@@ -209,9 +213,6 @@ namespace NewAxis.Services
         {
             var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).ToList();
             var separator = root.KeyValueSeparator == 1 ? ":" : "=";
-
-            ///KeyValueSeparator == 0 if is registry? 
-
 
             foreach (var setting in overrides)
             {
@@ -464,8 +465,6 @@ namespace NewAxis.Services
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private static void ApplyRegistrySettings(string registryPath, Root root, List<GameSettingOverride>? overrides)
         {
-            // Parse Root and SubKey
-            // Expected format: HKEY_CURRENT_USER\Software\...\...
             string rootKeyName = registryPath.Split('\\')[0];
             string subKeyPath = registryPath.Substring(rootKeyName.Length).TrimStart('\\');
 
@@ -495,9 +494,6 @@ namespace NewAxis.Services
 
                 Trace.WriteLine($"[Config] Writing to Registry: {registryPath}");
 
-                // Apply DefaultPreset if exists (assuming it's a list of values? No, usually DefaultPreset is a string file content)
-                // For Reg mode, we iterate Children/Overrides instead.
-
                 if (overrides == null || overrides.Count == 0) return;
 
                 foreach (var setting in overrides)
@@ -514,7 +510,6 @@ namespace NewAxis.Services
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private static void ProcessRegistrySetting(RegistryKey key, Child definition, string? value)
         {
-            // Handle Resolution Special Case
             if (definition.ValueRangeType == 3 && definition.Children != null && !string.IsNullOrEmpty(value))
             {
                 var parts = value.ToLower().Split('x');
@@ -550,12 +545,7 @@ namespace NewAxis.Services
         {
             if (string.IsNullOrEmpty(definition.KeyOrSearchPattern) && string.IsNullOrEmpty(definition.Name)) return;
 
-            string valueName = definition.KeyOrSearchPattern ?? definition.Name!; // KeyOrSearchPattern holds the Value Name
-
-            // RegistryValueType: 
-            // 4 = DWORD (REG_DWORD)
-            // 1 = String (REG_SZ)
-            // 0/Default -> infer? or assume String? Check user JSON: "RegistryValueType": 4
+            string valueName = definition.KeyOrSearchPattern ?? definition.Name!;
 
             try
             {
@@ -570,9 +560,9 @@ namespace NewAxis.Services
                             valueToWrite = intVal;
                             kind = RegistryValueKind.DWord;
                         }
-                        else if (long.TryParse(value, out long longVal)) // Handle potential unsigned stuff?
+                        else if (long.TryParse(value, out long longVal))
                         {
-                            valueToWrite = longVal; // Registry.SetValue handles this
+                            valueToWrite = longVal;
                             kind = RegistryValueKind.DWord;
                         }
                         break;
@@ -581,7 +571,6 @@ namespace NewAxis.Services
                         kind = RegistryValueKind.String;
                         break;
                     default:
-                        // Fallback or assuming string or letting .NET decide
                         if (int.TryParse(value, out int v)) { valueToWrite = v; kind = RegistryValueKind.DWord; }
                         else { valueToWrite = value; kind = RegistryValueKind.String; }
                         break;
@@ -599,7 +588,6 @@ namespace NewAxis.Services
             }
         }
     }
-
 
     public class ConfigInstructions
     {

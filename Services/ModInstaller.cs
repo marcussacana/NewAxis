@@ -7,6 +7,7 @@ using System.Text;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using NewAxis.Models;
+using System.Reflection;
 
 namespace NewAxis.Services
 {
@@ -83,10 +84,9 @@ namespace NewAxis.Services
                 {
                     Trace.WriteLine($"[ModInstaller] Found ConfigArchive (Mode: {modType}), installing...");
                     var configLocalPath = await DownloadFileAsync(repoClient, gameEntry.ConfigArchivePath);
-                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson);
+                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson, gameEntry.SteamAppId);
                     installedFiles.AddRange(configFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
-
                 if (modType == ModType.ThreeDPlus)
                 {
                     if (string.IsNullOrEmpty(gameEntry.ReshadePath) || string.IsNullOrEmpty(gameEntry.TargetDllFileName))
@@ -220,6 +220,85 @@ namespace NewAxis.Services
                 Trace.WriteLine($"[ModInstaller] Error: {ex.Message}");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// Injects custom configurations for specific games based on Steam AppId and Config Root
+        /// </summary>
+        public static void InjectCustomConfigs(string? appId, Root root, List<GameSettingOverride>? overrides)
+        {
+            if (string.IsNullOrEmpty(appId) || overrides == null) return;
+
+
+            IEnumerable<Child> UEGameUserSetting = null;
+
+            try
+            {
+                UEGameUserSetting = root.Children
+                                    .SelectMany(x => x.Children
+                                                    .Where(x =>
+                                                    (x.PrecedingElement?.Contains("Script/") ?? false) &&
+                                                    !(x.PrecedingElement?.Contains("GameUserSettings") ?? true)));
+            }
+            catch { }
+
+            if (appId == "2138710")//Sifu
+            {
+                UEGameUserSetting = GetDummyPrecedingElement("[/Script/Sifu.WGGameUserSettings]");
+            }
+
+            if (UEGameUserSetting?.Any() ?? false)
+            {
+                foreach (var setting in UEGameUserSetting)
+                {
+                    var preceding = setting.Children.Select(x => x.PrecedingElement).FirstOrDefault();
+
+                    Child newSetup = CreateConfig("UNREAL_DLSS_DISABLER", "DLSSQuality", preceding);
+                    root.Children.Add(newSetup);
+
+                    newSetup = CreateConfig("UNREAL_DLSS_DISABLER_2", "DLSSMode", preceding);
+                    root.Children.Add(newSetup);
+                }
+
+                overrides.Add(new GameSettingOverride { GameSettingId = "UNREAL_DLSS_DISABLER", Value = "Off" });
+                overrides.Add(new GameSettingOverride { GameSettingId = "UNREAL_DLSS_DISABLER_2", Value = "Off" });
+            }
+        }
+
+        private static Child CreateConfig(string? ID, string? Name, string? preceding)
+        {
+            var newSetup = new Child();
+            newSetup.ID = ID;
+            newSetup.ValueRangeType = 2;
+            newSetup.Name = "Custom Setting " + Name;
+            newSetup.Children =
+            [
+                new Child
+                        {
+                            Name = Name,
+                            KeyOrSearchPattern = Name,
+                            PrecedingElement = preceding,
+                            OverrideValue = "%InputValue%"
+                        },
+                    ];
+            return newSetup;
+        }
+
+        private static IEnumerable<Child> GetDummyPrecedingElement(string PrecedingElement)
+        {
+            return new List<Child>() {
+                    new Child() {
+                        ID = "Dummy",
+                        Children = new List<Child>() {
+                            new Child() {
+                                Name = "Dummy",
+                                KeyOrSearchPattern = "Dummy",
+                                PrecedingElement = PrecedingElement,
+                                OverrideValue = "%InputValue%"
+                            }
+                        }
+                    }
+                }.AsEnumerable();
         }
 
         private static bool HasUnicodeChars(string path) => path.Any(c => c > 0x7F);
