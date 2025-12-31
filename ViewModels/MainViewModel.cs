@@ -16,7 +16,8 @@ namespace NewAxis.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
-    public string REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
+    public string MOD_REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
+    public string UPDATE_REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxis/refs/heads/updater/";
     public LocalizationService Localization => LocalizationService.Instance;
 
     public ObservableCollection<Game> Games { get; } = new();
@@ -433,7 +434,7 @@ public class MainViewModel : ViewModelBase
         LoadConfig();
 
         _allGames = new List<Game>();
-        _repoClient = new GameRepositoryClient(REPO_BASE);
+        _repoClient = new GameRepositoryClient(MOD_REPO_BASE);
 
         RefreshGamesList();
 
@@ -458,7 +459,7 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            if (_repoClient == null) _repoClient = new GameRepositoryClient(REPO_BASE);
+            var _repoClient = new GameRepositoryClient(UPDATE_REPO_BASE);
 
             var checker = new UpdateChecker(_repoClient);
             var info = await checker.CheckForUpdatesAsync();
@@ -495,7 +496,7 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            if (_repoClient == null) _repoClient = new GameRepositoryClient(REPO_BASE);
+            if (_repoClient == null) _repoClient = new GameRepositoryClient(MOD_REPO_BASE);
 
             ProgressOverlayMessage = Localization["DownloadingUpdate"];
             IsProgressOverlayVisible = true;
@@ -662,7 +663,7 @@ public class MainViewModel : ViewModelBase
             if (bool.TryParse(disableDlss, out bool bDisableDlss)) DisableDLSS = bDisableDlss;
 
             string? repoOverride = _iniParser.GetValue("Settings", "RepoOverride");
-            if (!string.IsNullOrEmpty(repoOverride)) REPO_BASE = repoOverride;
+            if (!string.IsNullOrEmpty(repoOverride)) MOD_REPO_BASE = repoOverride;
 
             LoadHotkey("DepthInc", (d, k, m) => { HotkeyDepthInc = d; KeyDepthInc = k; ModDepthInc = m; });
             LoadHotkey("DepthDec", (d, k, m) => { HotkeyDepthDec = d; KeyDepthDec = k; ModDepthDec = m; });

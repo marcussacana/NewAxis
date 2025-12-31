@@ -18,10 +18,19 @@ namespace NewAxis.Services
 
         public GameRepositoryClient(string baseUrlOrPath)
         {
-            _baseUrl = (baseUrlOrPath ?? REPO_BASE).TrimEnd('/', '\\');
+            bool HasLocalRepo = Directory.Exists(REPO_BASE) && false;
+
+            if (HasLocalRepo)
+            {
+                _baseUrl = REPO_BASE;
+            }
+            else
+            {
+                _baseUrl = baseUrlOrPath.TrimEnd('/', '\\');
+            }
 
             // Detecta se é caminho local ou URL
-            _isLocalPath = Directory.Exists(_baseUrl) ||
+            _isLocalPath = HasLocalRepo ||
                            (!_baseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
                             !_baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
 
@@ -151,7 +160,10 @@ namespace NewAxis.Services
             }
             else
             {
-                var fullUrl = $"{_baseUrl}/{relativeUrl}";
+                string fullUrl = relativeUrl;
+                if (Uri.IsWellFormedUriString(relativeUrl, UriKind.Relative))
+                    fullUrl = $"{_baseUrl}/{relativeUrl}";
+
                 Trace.WriteLine($"Downloading file: {fullUrl}");
                 bytes = await _httpClient!.GetByteArrayAsync(fullUrl);
             }
@@ -194,7 +206,7 @@ namespace NewAxis.Services
         public string? TargetDllFileName { get; set; }
         public string? ReshadePresetPlus { get; set; }
         public string? ReshadePresetNative { get; set; }
-        public string? OverwatchPath { get; set; }
+        public string? ShaderPath { get; set; }
         public long? UseAspectRatioHeuristics { get; set; }
         public long? DepthCopyBeforeClears { get; set; }
         public string? SettingsPlus { get; set; }

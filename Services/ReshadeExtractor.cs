@@ -22,7 +22,7 @@ namespace NewAxis.Services
         public string TargetDirectory { get; set; } = string.Empty;
         public string ExecutablePath { get; set; } = string.Empty;
         public GameIndexEntry GameEntry { get; set; } = new();
-        public string? OverwatchPath { get; set; }
+        public string? ShaderPath { get; set; }
     }
 
     public class ReshadeExtractor
@@ -69,10 +69,10 @@ namespace NewAxis.Services
                     installedFiles.Add(presetPath);
                 }
 
-                if (!string.IsNullOrEmpty(context.OverwatchPath) && File.Exists(context.OverwatchPath))
+                if (!string.IsNullOrEmpty(context.ShaderPath) && File.Exists(context.ShaderPath))
                 {
-                    var overwatchFiles = await ExtractOverwatchAsync(context.OverwatchPath, context.TargetDirectory);
-                    installedFiles.AddRange(overwatchFiles);
+                    var shaderFiles = await ExtractShaderAsync(context.ShaderPath, context.TargetDirectory);
+                    installedFiles.AddRange(shaderFiles);
                 }
 
                 UpdateReshadeIni(context.GameEntry, context.TargetDirectory, false);
@@ -262,23 +262,23 @@ namespace NewAxis.Services
         }
 
         /// <summary>
-        /// Extracts Overwatch.fxh from a 7z archive (file has no name inside)
+        /// Extracts Shader from a 7z archive (file has no name inside)
         /// </summary>
-        private static async Task<List<string>> ExtractOverwatchAsync(string overwatch7zPath, string targetDirectory)
+        private static async Task<List<string>> ExtractShaderAsync(string shader7zPath, string targetDirectory)
         {
-            var tempExtractDir = Path.Combine(Path.GetTempPath(), $"Overwatch_{Guid.NewGuid()}");
+            var tempExtractDir = Path.Combine(Path.GetTempPath(), $"Shader_{Guid.NewGuid()}");
             Directory.CreateDirectory(tempExtractDir);
             var extractedFiles = new List<string>();
 
             try
             {
                 // Extract the 7z archive
-                using (var archive = ArchiveFactory.Open(overwatch7zPath))
+                using (var archive = ArchiveFactory.Open(shader7zPath))
                 {
                     var entry = archive.Entries.FirstOrDefault(e => !e.IsDirectory);
                     if (entry == null)
                     {
-                        throw new Exception("No file found in Overwatch archive");
+                        throw new Exception("No file found in Shader archive");
                     }
 
                     // Extract to temp with any name
@@ -292,8 +292,8 @@ namespace NewAxis.Services
                         }
                     });
 
-                    // Copy to target directory as Overwatch.fxh
-                    var targetPath = Path.Combine(targetDirectory, "Overwatch.fxh");
+                    // Copy to target directory as Shader.fxh
+                    var targetPath = Path.Combine(targetDirectory, "Shader.fxh");
                     File.Copy(tempFilePath, targetPath, overwrite: true);
                     extractedFiles.Add(targetPath);
                 }

@@ -96,10 +96,11 @@ namespace NewAxis.Services
 
                     var reshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.ReshadePath);
 
-                    string? overwatchLocalPath = null;
-                    if (!string.IsNullOrEmpty(gameEntry.OverwatchPath))
+                    string? shaderLocalPath = null;
+                    if (!string.IsNullOrEmpty(gameEntry.ShaderPath))
                     {
-                        overwatchLocalPath = await DownloadFileAsync(repoClient, gameEntry.OverwatchPath);
+                        Trace.WriteLine($"[ModInstaller] Found Shader (Hash: {gameEntry.ShaderPath}), Skipping...");
+                        //shaderLocalPath = await DownloadFileAsync(repoClient, gameEntry.ShaderPath);
                     }
 
                     var reshadeFiles = await ReshadeExtractor.ExtractReshadeAsync(new ReshadeExtractionContext
@@ -108,7 +109,7 @@ namespace NewAxis.Services
                         TargetDirectory = targetDirectory,
                         ExecutablePath = executablePath,
                         GameEntry = gameEntry,
-                        OverwatchPath = overwatchLocalPath
+                        ShaderPath = shaderLocalPath
                     });
 
                     installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
@@ -404,7 +405,6 @@ namespace NewAxis.Services
                 }
 
                 Trace.WriteLine($"[ModInstaller] Detected split file ({totalParts} parts). Downloading...");
-
 
                 for (int i = 1; i <= totalParts; i++)
                 {
