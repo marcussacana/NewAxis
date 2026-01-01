@@ -239,7 +239,7 @@ namespace NewAxis.Services
                                     .SelectMany(x => x.Children
                                                     .Where(x =>
                                                     (x.PrecedingElement?.Contains("Script/") ?? false) &&
-                                                    !(x.PrecedingElement?.Contains("GameUserSettings") ?? true)));
+                                                    !(x.PrecedingElement?.Contains("GameUserSettings") ?? true))).ToArray();
             }
             catch { }
 
@@ -252,7 +252,9 @@ namespace NewAxis.Services
             {
                 foreach (var setting in UEGameUserSetting)
                 {
-                    var preceding = setting.Children.Select(x => x.PrecedingElement).FirstOrDefault();
+                    var preceding = setting.Children?.Select(x => x.PrecedingElement).FirstOrDefault() ?? setting.PrecedingElement ?? null;
+                    if (preceding == null)
+                        continue;
 
                     Child newSetup = CreateConfig("UNREAL_DLSS_DISABLER", "DLSSQuality", preceding);
                     root.Children.Add(newSetup);

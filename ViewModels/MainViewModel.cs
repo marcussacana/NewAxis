@@ -452,13 +452,19 @@ public class MainViewModel : ViewModelBase
         AcceptUpdateCommand = new RelayCommand(ExecuteAcceptUpdate);
         DeclineUpdateCommand = new RelayCommand(_ => ShowUpdatePrompt = false);
 
-        CheckForUpdates();
+        CheckForUpdates(false);
     }
 
-    private async void CheckForUpdates()
+    private async void CheckForUpdates(bool enforce)
     {
         try
         {
+            if (ShowUpdatePrompt && enforce)
+            {
+                ExecuteAcceptUpdate(null);
+                return;
+            }
+
             var _repoClient = new GameRepositoryClient(UPDATE_REPO_BASE);
 
             var checker = new UpdateChecker(_repoClient);
@@ -468,6 +474,11 @@ public class MainViewModel : ViewModelBase
             {
                 PendingUpdateUrl = info.DownloadUrl;
                 ShowUpdatePrompt = true;
+
+                if (enforce)
+                {
+                    ExecuteAcceptUpdate(null);
+                }
             }
         }
         catch (Exception ex)
@@ -613,6 +624,8 @@ public class MainViewModel : ViewModelBase
             SetLoadingOverlay(true, Localization["ConnectionError"], true);
 
             await Task.Delay(3000);
+
+            CheckForUpdates(true);
 
             SetLoadingOverlay(false, null, false);
 

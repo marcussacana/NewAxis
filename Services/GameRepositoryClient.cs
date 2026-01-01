@@ -161,7 +161,7 @@ namespace NewAxis.Services
             else
             {
                 string fullUrl = relativeUrl;
-                if (Uri.IsWellFormedUriString(relativeUrl, UriKind.Relative))
+                if (!relativeUrl.StartsWith("http", StringComparison.InvariantCultureIgnoreCase))
                     fullUrl = $"{_baseUrl}/{relativeUrl}";
 
                 Trace.WriteLine($"Downloading file: {fullUrl}");
