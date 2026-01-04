@@ -23,15 +23,6 @@ namespace NewAxis.Services
         {
             try
             {
-                // We'll treat update.json as a game file download, but it returns bytes.
-                // Repo Client handles local vs http.
-                // We need to fetch into memory.
-
-                // Hack: DownloadFileAsync saves to file.
-                // But repoClient has internal HttpClient if http.
-                // GameRepositoryClient isn't designed for "GetStringAsync" generic.
-                // But we can download "update.json" to temp and read it.
-
                 var tempPath = System.IO.Path.GetTempFileName();
                 await _repoClient.DownloadFileAsync("update.json", tempPath);
 

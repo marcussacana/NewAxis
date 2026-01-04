@@ -916,6 +916,7 @@ public class MainViewModel : ViewModelBase
             {
                 ModType.ThreeDUltra => gameEntry.StartArgsUltra,
                 ModType.ThreeDPlus => gameEntry.StartArgsPlus,
+                ModType.Native => gameEntry.StartArgsNative,
                 _ => null
             };
 

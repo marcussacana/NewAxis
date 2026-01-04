@@ -217,6 +217,7 @@ namespace NewAxis.Services
         public string? NativeReshadeDll { get; set; }
         public string? StartArgsUltra { get; set; }
         public string? StartArgsPlus { get; set; }
+        public string? StartArgsNative { get; set; }
 
         public ImageUrls? Images { get; set; }
         public string? ConfigArchivePath { get; set; }

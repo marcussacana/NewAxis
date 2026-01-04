@@ -484,6 +484,11 @@ namespace NewAxis.Services
                 return;
             }
 
+            if (baseKey.OpenSubKey(subKeyPath) == null && !string.IsNullOrWhiteSpace(root.DefaultPreset))
+            {
+                ApplyRegistryPreset(root.DefaultPreset);
+            }
+
             using (var key = baseKey.CreateSubKey(subKeyPath, writable: true))
             {
                 if (key == null)
@@ -508,6 +513,174 @@ namespace NewAxis.Services
         }
 
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+        private static void ApplyRegistryPreset(string defaultPreset)
+        {
+            if (string.IsNullOrWhiteSpace(defaultPreset)) return;
+
+            var rawLines = defaultPreset.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+            var processedLines = new List<string>();
+            string currentLine = "";
+
+            foreach (var line in rawLines)
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("Windows Registry Editor", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (trimmed.EndsWith("\\"))
+                {
+                    currentLine += trimmed.Substring(0, trimmed.Length - 1);
+                }
+                else
+                {
+                    currentLine += trimmed;
+                    if (!string.IsNullOrWhiteSpace(currentLine))
+                    {
+                        processedLines.Add(currentLine);
+                    }
+                    currentLine = "";
+                }
+            }
+
+            RegistryKey? currentKey = null;
+
+            foreach (var line in processedLines)
+            {
+                if (line.StartsWith("[") && line.EndsWith("]"))
+                {
+                    // Handle Key
+                    currentKey?.Dispose();
+                    currentKey = null;
+
+                    string fullPath = line.Substring(1, line.Length - 2);
+                    string rootKeyName = fullPath.Split('\\')[0];
+                    string subKeyPath = fullPath.Contains('\\') ? fullPath.Substring(rootKeyName.Length + 1) : "";
+
+                    RegistryKey? baseKey = rootKeyName.ToUpper() switch
+                    {
+                        "HKEY_CURRENT_USER" or "HKCU" => Registry.CurrentUser,
+                        "HKEY_LOCAL_MACHINE" or "HKLM" => Registry.LocalMachine,
+                        "HKEY_CLASSES_ROOT" or "HKCR" => Registry.ClassesRoot,
+                        "HKEY_USERS" or "HKU" => Registry.Users,
+                        "HKEY_CURRENT_CONFIG" or "HKCC" => Registry.CurrentConfig,
+                        _ => null
+                    };
+
+                    if (baseKey != null)
+                    {
+                        try
+                        {
+                            currentKey = baseKey.CreateSubKey(subKeyPath, writable: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            Trace.WriteLine($"[Config] Failed to create registry key {fullPath}: {ex.Message}");
+                        }
+                    }
+                }
+                else if (currentKey != null && line.Contains('='))
+                {
+                    // Handle Value
+                    int eqIndex = line.IndexOf('=');
+                    string nameRaw = line.Substring(0, eqIndex).Trim();
+                    string valueRaw = line.Substring(eqIndex + 1).Trim();
+
+                    string valueName = nameRaw.StartsWith("\"") && nameRaw.EndsWith("\"")
+                        ? nameRaw.Substring(1, nameRaw.Length - 2)
+                        : nameRaw;
+
+                    if (valueName == "@") valueName = ""; // Default value
+
+                    try
+                    {
+                        object? valueToSet = null;
+                        RegistryValueKind kind = RegistryValueKind.String;
+
+                        if (valueRaw.StartsWith("\"") && valueRaw.EndsWith("\""))
+                        {
+                            // String
+                            valueToSet = valueRaw.Substring(1, valueRaw.Length - 2)
+                                .Replace("\\\\", "\\")
+                                .Replace("\\\"", "\"");
+                            kind = RegistryValueKind.String;
+                        }
+                        else if (valueRaw.StartsWith("dword:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // DWORD
+                            string hex = valueRaw.Substring(6);
+                            if (int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int dword))
+                            {
+                                valueToSet = dword;
+                                kind = RegistryValueKind.DWord;
+                            }
+                        }
+                        else if (valueRaw.StartsWith("hex:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Binary (REG_BINARY)
+                            valueToSet = ParseHexData(valueRaw.Substring(4));
+                            kind = RegistryValueKind.Binary;
+                        }
+                        else if (valueRaw.StartsWith("hex(2):", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Expandable String (REG_EXPAND_SZ)
+                            byte[] data = ParseHexData(valueRaw.Substring(7));
+                            valueToSet = System.Text.Encoding.Unicode.GetString(data).TrimEnd('\0');
+                            kind = RegistryValueKind.ExpandString;
+                        }
+                        else if (valueRaw.StartsWith("hex(7):", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Multi-String (REG_MULTI_SZ)
+                            byte[] data = ParseHexData(valueRaw.Substring(7));
+                            string fullStr = System.Text.Encoding.Unicode.GetString(data);
+                            valueToSet = fullStr.Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries);
+                            kind = RegistryValueKind.MultiString;
+                        }
+                        else if (valueRaw.StartsWith("hex(b):", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // QWORD (REG_QWORD)
+                            byte[] data = ParseHexData(valueRaw.Substring(7));
+                            if (data.Length >= 8)
+                            {
+                                valueToSet = BitConverter.ToInt64(data, 0);
+                                kind = RegistryValueKind.QWord;
+                            }
+                        }
+                        else
+                        {
+                            Trace.WriteLine($"[Config] Unknown registry value kind: {valueRaw}");
+                        }
+
+                        if (valueToSet != null)
+                        {
+                            Trace.WriteLine($"[Config] Setting registry value {valueName} to {valueToSet} ({kind})");
+                            currentKey.SetValue(valueName, valueToSet, kind);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace.WriteLine($"[Config] Error setting registry value {valueName}: {ex.Message}");
+                    }
+                }
+            }
+
+            currentKey?.Dispose();
+        }
+
+        private static byte[] ParseHexData(string hexPart)
+        {
+            var bytes = new List<byte>();
+            var hexValues = hexPart.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var hv in hexValues)
+            {
+                if (byte.TryParse(hv.Trim(), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte b))
+                {
+                    bytes.Add(b);
+                }
+            }
+            return bytes.ToArray();
+        }
+
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private static void ProcessRegistrySetting(RegistryKey key, Child definition, string? value)
         {
             if (definition.ValueRangeType == 3 && definition.Children != null && !string.IsNullOrEmpty(value))
@@ -526,7 +699,7 @@ namespace NewAxis.Services
                             childValue = childValue.Replace("%ResWidth%", width, StringComparison.OrdinalIgnoreCase)
                                                    .Replace("%ResHeight%", height, StringComparison.OrdinalIgnoreCase);
 
-                            ProcessSingleRegistrySetting(key, child, childValue);
+                            ProcessSingleRegistrySetting(key, definition, child, childValue);
                         }
                     }
                 }
@@ -536,16 +709,31 @@ namespace NewAxis.Services
             foreach (var child in definition!.Children!.Where(x => x != null))
             {
                 var childValue = child.OverrideValue?.Replace("%InputValue%", value, StringComparison.OrdinalIgnoreCase) ?? value;
-                ProcessSingleRegistrySetting(key, child, childValue);
+                ProcessSingleRegistrySetting(key, definition, child, childValue);
             }
         }
 
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-        private static void ProcessSingleRegistrySetting(RegistryKey key, Child definition, string? value)
+        private static void ProcessSingleRegistrySetting(RegistryKey key, Child parent, Child definition, string? value)
         {
             if (string.IsNullOrEmpty(definition.KeyOrSearchPattern) && string.IsNullOrEmpty(definition.Name)) return;
 
             string valueName = definition.KeyOrSearchPattern ?? definition.Name!;
+
+            // Check mapping on Parent first (e.g. Resolution definition holds values), then self
+            var availableValues = parent?.AvailableSettingValues ?? definition.AvailableSettingValues;
+
+            if (availableValues != null)
+            {
+                var predefined = availableValues.FirstOrDefault(
+                    v => string.Equals(v.FriendlyName, value, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(v.Value, value, StringComparison.OrdinalIgnoreCase));
+
+                if (predefined != null && predefined.Value != null)
+                {
+                    value = predefined.Value;
+                }
+            }
 
             try
             {
