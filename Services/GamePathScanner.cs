@@ -20,10 +20,16 @@ namespace NewAxis.Services
         /// </summary>
         /// <param name="gameEntry">The game index entry containing directory name, executable info, and Steam App ID.</param>
         /// <returns>The full path if found, or null.</returns>
-        public static string? FindGameDirectory(GameIndexEntry gameEntry)
+        public static string? FindGameDirectory(GameIndexEntry gameEntry, string hintPath = null)
         {
             if (gameEntry == null || string.IsNullOrWhiteSpace(gameEntry.DirectoryName))
                 return null;
+
+            string? path = CheckGamePath(gameEntry, hintPath);
+            if (path != null)
+            {
+                return path;
+            }
 
             var drives = DriveInfo.GetDrives().Where(d => d.IsReady).Select(d => d.RootDirectory.FullName);
 
@@ -32,23 +38,10 @@ namespace NewAxis.Services
                 foreach (var suffix in SteamLibrarySuffixes)
                 {
                     var potentialPath = Path.Combine(driveRoot, suffix, gameEntry.DirectoryName);
-
-                    if (Directory.Exists(potentialPath))
+                    path = CheckGamePath(gameEntry, potentialPath);
+                    if (path != null)
                     {
-                        // If executable name is provided, verify it exists
-                        if (!string.IsNullOrEmpty(gameEntry.ExecutablePath))
-                        {
-                            var fullExePath = Path.Combine(potentialPath, gameEntry.RelativeExecutablePath ?? "", gameEntry.ExecutablePath);
-                            if (File.Exists(fullExePath))
-                            {
-                                return potentialPath;
-                            }
-                            // If exe doesn't exist, continue searching other locations
-                            continue;
-                        }
-
-                        // If no exe specified, just return the directory (legacy behavior)
-                        return potentialPath;
+                        return path;
                     }
                 }
             }
@@ -61,6 +54,29 @@ namespace NewAxis.Services
                 {
                     return steamPath;
                 }
+            }
+
+            return null;
+        }
+
+        private static string? CheckGamePath(GameIndexEntry gameEntry, string potentialPath)
+        {
+            if (Directory.Exists(potentialPath))
+            {
+                // If executable name is provided, verify it exists
+                if (!string.IsNullOrEmpty(gameEntry.ExecutablePath))
+                {
+                    var fullExePath = Path.Combine(potentialPath, gameEntry.RelativeExecutablePath ?? "", gameEntry.ExecutablePath);
+                    if (File.Exists(fullExePath))
+                    {
+                        return potentialPath;
+                    }
+                    // If exe doesn't exist, continue searching other locations
+                    return null;
+                }
+
+                // If no exe specified, just return the directory (legacy behavior)
+                return potentialPath;
             }
 
             return null;

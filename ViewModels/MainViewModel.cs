@@ -560,7 +560,7 @@ public class MainViewModel : ViewModelBase
                         var gameInfo = index.Games.FirstOrDefault(g => g.GameName == gameName);
                         if (gameInfo != null && !string.IsNullOrEmpty(installPath))
                         {
-                            var game = await LoadGame(gameInfo, gameName);
+                            var game = await LoadGame(gameInfo, gameName, installPath);
                             _allGames.Add(game);
                         }
 
@@ -634,7 +634,7 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    private async Task<Game> LoadGame(GameIndexEntry gameEntry, string gameName)
+    private async Task<Game> LoadGame(GameIndexEntry gameEntry, string gameName, string hintPath = null)
     {
         List<ModType> mods = new List<ModType>();
         if (!string.IsNullOrEmpty(gameEntry.ShaderMod) && !string.IsNullOrEmpty(gameEntry.MigotoPath)) mods.Add(ModType.ThreeDUltra);
@@ -645,7 +645,7 @@ public class MainViewModel : ViewModelBase
         if (gameEntry.Creator != null) game.Creator = gameEntry.Creator;
         if (!string.IsNullOrEmpty(gameEntry.DirectoryName))
         {
-            var detectedPath = GamePathScanner.FindGameDirectory(gameEntry);
+            var detectedPath = GamePathScanner.FindGameDirectory(gameEntry, hintPath);
 
             if (!string.IsNullOrEmpty(detectedPath))
             {
