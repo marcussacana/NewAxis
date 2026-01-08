@@ -84,7 +84,7 @@ namespace NewAxis.Services
                 {
                     Trace.WriteLine($"[ModInstaller] Found ConfigArchive (Mode: {modType}), installing...");
                     var configLocalPath = await DownloadFileAsync(repoClient, gameEntry.ConfigArchivePath);
-                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson, gameEntry.SteamAppId);
+                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson, gameEntry);
                     installedFiles.AddRange(configFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
                 if (modType == ModType.ThreeDPlus)
@@ -226,9 +226,9 @@ namespace NewAxis.Services
         /// <summary>
         /// Injects custom configurations for specific games based on Steam AppId and Config Root
         /// </summary>
-        public static void InjectCustomConfigs(string? appId, Root root, List<GameSettingOverride>? overrides)
+        public static void InjectCustomConfigs(GameIndexEntry? gameEntry, Root root, List<GameSettingOverride>? overrides)
         {
-            if (string.IsNullOrEmpty(appId) || overrides == null) return;
+            if (gameEntry == null || overrides == null) return;
 
 
             IEnumerable<Child> UEGameUserSetting = null;
@@ -236,16 +236,31 @@ namespace NewAxis.Services
             try
             {
                 UEGameUserSetting = root.Children
-                                    .SelectMany(x => x.Children
-                                                    .Where(x =>
-                                                    (x.PrecedingElement?.Contains("Script/") ?? false) &&
-                                                    !(x.PrecedingElement?.Contains("GameUserSettings") ?? true))).ToArray();
+                                    .SelectMany(x => x.Children.Where(x =>
+
+                                                    ((x.PrecedingElement?.Contains("Script/") ?? false) &&
+                                                    !(x.PrecedingElement?.Contains("GameUserSettings") ?? true))
+                                                    ||
+                                                    (x.Name?.Contains("DLSS") ?? false)
+                                    )).ToArray();
             }
             catch { }
 
-            if (appId == "2138710")//Sifu
+
+            if (gameEntry.SteamAppId == "2138710")//Sifu
             {
                 UEGameUserSetting = GetDummyPrecedingElement("[/Script/Sifu.WGGameUserSettings]");
+            }
+
+            if (gameEntry.SteamAppId == "1330470")//F.I.S.T Forged In Shadow Torch
+            {
+                if (root.ConfigFilePaths.First().Path.EndsWith("Engine.ini", true, null))
+                {
+                    Child newSetup = CreateConfig("UNREAL_DX11", "DefaultGraphicsRHI", "[/Script/WindowsTargetPlatform.WindowsTargetSettings]");
+                    root.Children.Add(newSetup);
+
+                    overrides.Add(new GameSettingOverride { GameSettingId = "UNREAL_DX11", Value = "DefaultGraphicsRHI_DX11" });
+                }
             }
 
             if (UEGameUserSetting?.Any() ?? false)
@@ -261,10 +276,14 @@ namespace NewAxis.Services
 
                     newSetup = CreateConfig("UNREAL_DLSS_DISABLER_2", "DLSSMode", preceding);
                     root.Children.Add(newSetup);
+
+                    newSetup = CreateConfig("UNREAL_DLSS_DISABLER_3", "DLSSEnabled", preceding);
+                    root.Children.Add(newSetup);
                 }
 
                 overrides.Add(new GameSettingOverride { GameSettingId = "UNREAL_DLSS_DISABLER", Value = "Off" });
                 overrides.Add(new GameSettingOverride { GameSettingId = "UNREAL_DLSS_DISABLER_2", Value = "Off" });
+                overrides.Add(new GameSettingOverride { GameSettingId = "UNREAL_DLSS_DISABLER_3", Value = "False" });
             }
         }
 
@@ -309,23 +328,44 @@ namespace NewAxis.Services
         {
             if (!enabled) return;
 
+            Trace.WriteLine($"[ModInstaller] Processing blacklist...");
+
+            var dllList = Directory.GetFiles(gameInstallPath, "*.dll", SearchOption.AllDirectories).ToList();
 
             foreach (var blacklistFile in _blacklistedFiles)
             {
+                //Find for the blacklist on exe directory
                 var fullPath = Path.Combine(targetDirectory, blacklistFile);
                 if (File.Exists(fullPath))
                 {
-                    var backupPath = fullPath + ".disabled";
-                    if (File.Exists(backupPath))
-                    {
-                        File.Delete(backupPath);
-                    }
-                    File.Move(fullPath, backupPath);
-                    Trace.WriteLine($"[ModInstaller] Disabled blacklisted file: {blacklistFile}");
+                    DisableFile(fullPath);
+                    installedFiles.Add(fullPath);
+                }
 
-                    installedFiles.Add(Path.GetRelativePath(gameInstallPath, fullPath));
+                //Find for the blacklist on entire game directory
+                var entries = dllList.Where(x => Path.GetFileName(x).Equals(blacklistFile, StringComparison.InvariantCultureIgnoreCase));
+                if (entries.Any())
+                {
+                    foreach (var targetFile in entries)
+                    {
+                        DisableFile(targetFile);
+                        installedFiles.Add(targetFile);
+                    }
                 }
             }
+        }
+
+        private static void DisableFile(string fileToDisable)
+        {
+            var fn = Path.GetFileName(fileToDisable);
+            var froot = Path.GetDirectoryName(fileToDisable);
+            var backupPath = Path.Combine(froot, fn + ".disabled");
+            if (File.Exists(backupPath))
+            {
+                File.Delete(backupPath);
+            }
+            File.Move(fileToDisable, backupPath);
+            Trace.WriteLine($"[ModInstaller] Disabled blacklisted file: {fn}");
         }
 
         public static async Task UninstallModAsync(string gameInstallPath, bool deleteBackups = false)

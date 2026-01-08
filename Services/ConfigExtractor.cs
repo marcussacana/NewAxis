@@ -25,7 +25,7 @@ namespace NewAxis.Services
             string config7zPath,
             string targetDirectory,
             string? settingsOverridesJson = null,
-            string? appId = null)
+            GameIndexEntry? gameEntry = null)
         {
             if (!File.Exists(config7zPath))
             {
@@ -69,7 +69,7 @@ namespace NewAxis.Services
                 if (jsonInstructionsPath != null)
                 {
                     Trace.WriteLine($"[Config] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
-                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson, appId);
+                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson, gameEntry);
                 }
                 else
                 {
@@ -98,7 +98,7 @@ namespace NewAxis.Services
             string sourceDir,
             string targetDirectory,
             string? settingsOverridesJson,
-            string? appId)
+            GameIndexEntry? gameEntry)
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
@@ -130,7 +130,7 @@ namespace NewAxis.Services
                     {
                         if (string.IsNullOrEmpty(root.Name) && root.ConfigFilePaths == null) continue;
 
-                        ModInstaller.InjectCustomConfigs(appId, root, overrides);
+                        ModInstaller.InjectCustomConfigs(gameEntry, root, overrides);
 
                         if (root.ConfigFilePaths != null)
                         {
@@ -180,7 +180,7 @@ namespace NewAxis.Services
                                 else if (!string.IsNullOrEmpty(root.DefaultPreset))
                                 {
                                     // Use default preset
-                                    contentToWrite = root.DefaultPreset;
+                                    contentToWrite = root.DefaultPreset.TrimEnd();
                                 }
 
                                 if (overrides != null && overrides.Count > 0)
@@ -267,6 +267,11 @@ namespace NewAxis.Services
 
         private static void ProcessSingleSetting(List<string> lines, Child definition, Child? parent, string? rawValue, string separator, int keyValueSeparator)
         {
+            while (lines.Count > 0 && string.IsNullOrWhiteSpace(lines.Last()))
+            {
+                lines.RemoveAt(lines.Count - 1);
+            }
+
             string? keyToUse = definition.KeyOrSearchPattern;
 
             if (string.IsNullOrEmpty(keyToUse))
