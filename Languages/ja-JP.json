@@ -35,5 +35,16 @@
     "DisableDLSS": "DLSSを無効にする",
     "Search": "検索",
     "SearchGames": "ゲームを検索...",
-    "GameRunning": "実行中..."
+    "GameRunning": "実行中...",
+    "RepoUpdateAvailable": "リポジトリの更新が利用可能です",
+    "RepoUpdatePromptMessage": "新しいリポジトリの更新が利用可能です。オフラインで使用するために、今すぐダウンロードしますか？",
+    "UpdatingRepository": "リポジトリを更新中...",
+    "DownloadOfflineRepo": "オフラインリポジトリのダウンロード/更新",
+    "LargeDownloadWarning": "これには数分かかる場合があります...",
+    "DownloadingRepoArchive": "リポジトリアーカイブをダウンロード中...",
+    "ExtractingRepo": "リポジトリを展開中...",
+    "RepoUpdateSuccess": "リポジトリの更新に成功しました！",
+    "DownloadingIndex": "インデックスをダウンロード中...",
+    "ProcessingGame": "処理中 {0}/{1}: {2}",
+    "ModRepoUrl": "カスタムモッドリポジトリのURL"
 }

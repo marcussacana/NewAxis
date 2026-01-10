@@ -16,9 +16,22 @@ namespace NewAxis.ViewModels;
 
 public class MainViewModel : ViewModelBase
 {
-    public string MOD_REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
     public string UPDATE_REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxis/refs/heads/updater/";
     public LocalizationService Localization => LocalizationService.Instance;
+
+    private const string DEFAULT_MOD_REPO = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
+    private string _appliedRepoUrl = DEFAULT_MOD_REPO;
+
+    private string _modRepoUrl = DEFAULT_MOD_REPO;
+    public string MOD_REPO_BASE
+    {
+        get => _modRepoUrl == DEFAULT_MOD_REPO ? "" : _modRepoUrl;
+        set
+        {
+            var newVal = string.IsNullOrWhiteSpace(value) ? DEFAULT_MOD_REPO : value;
+            SetField(ref _modRepoUrl, newVal);
+        }
+    }
 
     public ObservableCollection<Game> Games { get; } = new();
 
@@ -434,7 +447,8 @@ public class MainViewModel : ViewModelBase
         LoadConfig();
 
         _allGames = new List<Game>();
-        _repoClient = new GameRepositoryClient(MOD_REPO_BASE);
+        _appliedRepoUrl = _modRepoUrl;
+        _repoClient = new GameRepositoryClient(_appliedRepoUrl);
 
         RefreshGamesList();
 
@@ -453,6 +467,30 @@ public class MainViewModel : ViewModelBase
         DeclineUpdateCommand = new RelayCommand(_ => ShowUpdatePrompt = false);
 
         CheckForUpdates(false);
+        _ = CheckForRepoUpdatesAsync();
+    }
+
+    private async Task CheckForRepoUpdatesAsync()
+    {
+        try
+        {
+            if (_repoClient == null) return;
+
+            var onlineDate = await _repoClient.GetOnlineRepoDateAsync();
+            var localDate = await _repoClient.GetLocalRepoDateAsync();
+
+            Trace.WriteLine($"Repo Update Check - Online: {onlineDate}, Local: {localDate}");
+
+            if (onlineDate != null && localDate != null && onlineDate > localDate)
+            {
+                PendingRepoUpdate = true;
+                ShowRepoUpdatePrompt = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"Repo update check error: {ex.Message}");
+        }
     }
 
     private async void CheckForUpdates(bool enforce)
@@ -499,6 +537,53 @@ public class MainViewModel : ViewModelBase
     public ICommand AcceptUpdateCommand { get; }
     public ICommand DeclineUpdateCommand { get; }
 
+    private bool _showRepoUpdatePrompt;
+    public bool ShowRepoUpdatePrompt
+    {
+        get => _showRepoUpdatePrompt;
+        set => SetField(ref _showRepoUpdatePrompt, value);
+    }
+
+    private bool PendingRepoUpdate { get; set; }
+
+    public ICommand AcceptRepoUpdateCommand => new RelayCommand(async _ =>
+    {
+        ShowRepoUpdatePrompt = false;
+        if (PendingRepoUpdate)
+        {
+            await ExecuteRepoUpdate();
+        }
+    });
+
+    public ICommand DeclineRepoUpdateCommand => new RelayCommand(_ => ShowRepoUpdatePrompt = false);
+
+    public ICommand DownloadOfflineRepoCommand => new RelayCommand(async _ => await ExecuteRepoUpdate());
+
+    private async Task ExecuteRepoUpdate()
+    {
+        if (_repoClient == null) return;
+
+        try
+        {
+            IsProgressOverlayVisible = true;
+            ProgressOverlayMessage = Localization["UpdatingRepository"];
+
+            var progress = new Progress<string>(msg => ProgressOverlayMessage = msg);
+            await _repoClient.DownloadEntireRepoAsync(progress);
+
+            IsProgressOverlayVisible = false;
+            PendingRepoUpdate = false;
+
+            // Reload games after repo update
+            _ = LoadGamesFromRepositoryAsync();
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"Repo update failed: {ex.Message}");
+            SetLoadingOverlay(true, "Update Failed", true);
+        }
+    }
+
     private async void ExecuteAcceptUpdate(object? obj)
     {
         if (string.IsNullOrEmpty(PendingUpdateUrl)) return;
@@ -507,7 +592,7 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            if (_repoClient == null) _repoClient = new GameRepositoryClient(MOD_REPO_BASE);
+            if (_repoClient == null) _repoClient = new GameRepositoryClient(UPDATE_REPO_BASE);
 
             ProgressOverlayMessage = Localization["DownloadingUpdate"];
             IsProgressOverlayVisible = true;
@@ -539,6 +624,7 @@ public class MainViewModel : ViewModelBase
         try
         {
             IsLoadingGames = true;
+            _allGames.Clear();
             RefreshGamesList();
 
             var index = await _repoClient.GetGameIndexAsync();
@@ -676,7 +762,8 @@ public class MainViewModel : ViewModelBase
             if (bool.TryParse(disableDlss, out bool bDisableDlss)) DisableDLSS = bDisableDlss;
 
             string? repoOverride = _iniParser.GetValue("Settings", "RepoOverride");
-            if (!string.IsNullOrEmpty(repoOverride)) MOD_REPO_BASE = repoOverride;
+            if (!string.IsNullOrEmpty(repoOverride)) _modRepoUrl = repoOverride;
+            else _modRepoUrl = DEFAULT_MOD_REPO;
 
             LoadHotkey("DepthInc", (d, k, m) => { HotkeyDepthInc = d; KeyDepthInc = k; ModDepthInc = m; });
             LoadHotkey("DepthDec", (d, k, m) => { HotkeyDepthDec = d; KeyDepthDec = k; ModDepthDec = m; });
@@ -710,6 +797,7 @@ public class MainViewModel : ViewModelBase
             _iniParser.SetValue("Settings", "InstallModTemporarily", InstallModTemporarily.ToString());
             _iniParser.SetValue("Settings", "ShowUninstalledGames", ShowUninstalledGames.ToString());
             _iniParser.SetValue("Settings", "DisableDLSS", DisableDLSS.ToString());
+            _iniParser.SetValue("Settings", "RepoOverride", MOD_REPO_BASE);
 
             void SaveHotkey(string prefix, string display, Key key, KeyModifiers mod)
             {
@@ -739,6 +827,15 @@ public class MainViewModel : ViewModelBase
     private void ExecuteApplySettings(object? obj)
     {
         IsSettingsOpen = false;
+
+        bool repoChanged = _appliedRepoUrl != _modRepoUrl;
+        if (repoChanged)
+        {
+            _appliedRepoUrl = _modRepoUrl;
+            _repoClient = new GameRepositoryClient(_appliedRepoUrl);
+            _ = LoadGamesFromRepositoryAsync();
+        }
+
         SaveConfig();
     }
 
@@ -887,25 +984,6 @@ public class MainViewModel : ViewModelBase
                 gameEntry.RelativeExecutablePath ?? "",
                 gameEntry.ExecutablePath ?? "");
 
-            if (!File.Exists(exePath))
-            {
-                Trace.WriteLine($"Executable not found: {exePath}");
-
-                var otherExes = Directory.GetFiles(SelectedGame.InstallPath, Path.GetFileName(exePath), SearchOption.AllDirectories);
-
-                if (otherExes.Length > 0)
-                {
-                    exePath = otherExes.First();
-                    Trace.WriteLine($"Found hinted executable: {exePath}");
-                }
-                else
-                {
-
-                    IsGameSessionActive = false;
-                    return;
-                }
-            }
-
             var acfPath = Path.Combine(Path.GetFullPath($"..\\..\\appmanifest_{gameEntry.SteamAppId}.acf", SelectedGame.InstallPath));
 
             bool isSteamGame = File.Exists(acfPath);
@@ -943,6 +1021,25 @@ public class MainViewModel : ViewModelBase
             }
             else
             {
+                if (!File.Exists(exePath))
+                {
+                    Trace.WriteLine($"Executable not found: {exePath}");
+
+                    var otherExes = Directory.GetFiles(SelectedGame.InstallPath, Path.GetFileName(exePath), SearchOption.AllDirectories);
+
+                    if (otherExes.Length > 0)
+                    {
+                        exePath = otherExes.First();
+                        Trace.WriteLine($"Found hinted executable: {exePath}");
+                    }
+                    else
+                    {
+
+                        IsGameSessionActive = false;
+                        return;
+                    }
+                }
+
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = exePath,

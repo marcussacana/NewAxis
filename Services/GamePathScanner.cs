@@ -114,13 +114,6 @@ namespace NewAxis.Services
                     var gamePath = Path.Combine(steamAppsPath, "common", installDir);
                     if (!Directory.Exists(gamePath)) continue;
 
-                    // Verify executable if specified
-                    if (!string.IsNullOrEmpty(executableName))
-                    {
-                        var fullExePath = Path.Combine(gamePath, relativeExecutablePath ?? "", executableName);
-                        if (!File.Exists(fullExePath)) continue;
-                    }
-
                     return gamePath;
                 }
                 catch

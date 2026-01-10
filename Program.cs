@@ -8,7 +8,7 @@ namespace NewAxis;
 
 class Program
 {
-    public const int CurrentVersion = 11;
+    public const int CurrentVersion = 12;
 
     [STAThread]
     public static void Main(string[] args)

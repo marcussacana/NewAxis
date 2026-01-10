@@ -2,141 +2,318 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Avalonia;
 
 namespace NewAxis.Services
 {
     public class GameRepositoryClient
     {
-        private const string REPO_BASE = @".\GameDownloader\Downloads";
+        public string REPO_BASE = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ModRepository");
 
         private HttpClient? _httpClient;
         private readonly string _baseUrl;
-        private readonly bool _isLocalPath;
+        private readonly bool _isForceLocalMode;
 
         public GameRepositoryClient(string baseUrlOrPath)
         {
-            bool HasLocalRepo = Directory.Exists(REPO_BASE) && false;
+            // If the input is essentially the local repo path, force local mode
+            bool inputIsLocal = !baseUrlOrPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                                !baseUrlOrPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
-            if (HasLocalRepo)
+            if (inputIsLocal)
             {
-                _baseUrl = REPO_BASE;
+                _baseUrl = Path.GetFullPath(baseUrlOrPath);
+                _isForceLocalMode = true;
             }
             else
             {
                 _baseUrl = baseUrlOrPath.TrimEnd('/', '\\');
-            }
-
-            // Detecta se é caminho local ou URL
-            _isLocalPath = HasLocalRepo ||
-                           (!_baseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-                            !_baseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase));
-
-            if (!_isLocalPath)
-            {
                 _httpClient = new HttpClient();
-            }
-            else
-            {
-                _baseUrl = Path.GetFullPath(_baseUrl);
+                _httpClient.Timeout = TimeSpan.FromSeconds(10); // Fast timeout for fallback
+                _isForceLocalMode = false;
             }
 
-            Trace.WriteLine($"Repository Mode: {(_isLocalPath ? "LOCAL" : "HTTP")}");
-            Trace.WriteLine($"Base Path: {_baseUrl}");
+            Trace.WriteLine($"Repository Mode: {(_isForceLocalMode ? "LOCAL-ONLY" : "HYBRID (Online -> Local)")}");
+            Trace.WriteLine($"Base URL: {_baseUrl}");
         }
 
         public async Task<GameIndex> GetGameIndexAsync()
         {
-            string json;
-
-            if (_isLocalPath)
+            if (_isForceLocalMode)
             {
-                var indexPath = Path.Combine(_baseUrl, "index.json");
-                Trace.WriteLine($"Reading local index: {indexPath}");
-                json = await File.ReadAllTextAsync(indexPath);
+                return await GetLocalGameIndexAsync();
             }
-            else
+
+            try
             {
                 var indexUrl = $"{_baseUrl}/index.json";
                 Trace.WriteLine($"Downloading index: {indexUrl}");
-                json = await _httpClient!.GetStringAsync(indexUrl);
+                var json = await _httpClient!.GetStringAsync(indexUrl);
+                Trace.WriteLine("Parsing online index data");
+                return JsonSerializer.Deserialize(json, AppJsonContext.Default.GameIndex)!;
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Failed to get online index ({ex.Message}). Falling back to local.");
+                return await GetLocalGameIndexAsync();
+            }
+        }
+
+        private async Task<GameIndex> GetLocalGameIndexAsync()
+        {
+            var indexPath = Path.Combine(REPO_BASE, "index.json");
+            if (File.Exists(indexPath))
+            {
+                Trace.WriteLine($"Reading local index: {indexPath}");
+                var json = await File.ReadAllTextAsync(indexPath);
+                return JsonSerializer.Deserialize(json, AppJsonContext.Default.GameIndex)!;
             }
 
-            Trace.WriteLine("Parsing index data");
-            return JsonSerializer.Deserialize(json, AppJsonContext.Default.GameIndex)!;
+            throw new FileNotFoundException("Game index not found locally or online.", indexPath);
+        }
+
+        public async Task<DateTime?> GetOnlineRepoDateAsync()
+        {
+            if (_isForceLocalMode) return null;
+
+            try
+            {
+                // We fetch the index solely to check the generated date
+                var index = await GetGameIndexAsync();
+
+                if (DateTime.TryParse(index.GeneratedAt, out var date))
+                {
+                    return date;
+                }
+            }
+            catch
+            {
+                // Ignore errors during check
+            }
+            return null;
+        }
+
+        public async Task<DateTime?> GetLocalRepoDateAsync()
+        {
+            try
+            {
+                var index = await GetLocalGameIndexAsync();
+                if (DateTime.TryParse(index.GeneratedAt, out var date))
+                {
+                    return date;
+                }
+            }
+            catch
+            {
+                return null;
+            }
+            return null;
+        }
+
+        public async Task DownloadEntireRepoAsync(IProgress<string> progress)
+        {
+            if (_isForceLocalMode || _httpClient == null) return;
+
+            Directory.CreateDirectory(REPO_BASE);
+
+            // Strategy 1: GitHub Zip Download
+            if (TryGetGitHubZipUrl(_baseUrl, out string zipUrl))
+            {
+                try
+                {
+                    progress.Report(LocalizationService.Instance["LargeDownloadWarning"]);
+                    await Task.Delay(2000);
+
+                    progress.Report(LocalizationService.Instance["DownloadingRepoArchive"]);
+                    Trace.WriteLine($"Attempting GitHub Zip download: {zipUrl}");
+
+                    using var response = await _httpClient.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead);
+                    response.EnsureSuccessStatusCode();
+
+                    var tempZipPath = Path.GetTempFileName();
+                    using (var fs = File.Create(tempZipPath))
+                    {
+                        await response.Content.CopyToAsync(fs);
+                    }
+
+                    progress.Report(LocalizationService.Instance["ExtractingRepo"]);
+                    Trace.WriteLine("Extracting zip...");
+
+                    using (var zip = ZipFile.OpenRead(tempZipPath))
+                    {
+                        // Identify root folder (GitHub zips often have a root folder with the repo name)
+                        var firstEntry = zip.Entries.FirstOrDefault();
+                        string? rootDir = firstEntry?.FullName.Split('/')[0];
+
+                        foreach (var entry in zip.Entries)
+                        {
+                            if (string.IsNullOrEmpty(entry.Name)) continue; // Directory entry
+
+                            string entryPath = entry.FullName;
+                            if (!string.IsNullOrEmpty(rootDir) && entryPath.StartsWith(rootDir))
+                            {
+                                entryPath = entryPath.Substring(rootDir.Length).TrimStart('/', '\\');
+                            }
+
+                            if (string.IsNullOrEmpty(entryPath)) continue;
+
+                            var fullPath = Path.Combine(REPO_BASE, entryPath);
+                            var directory = Path.GetDirectoryName(fullPath);
+                            if (!string.IsNullOrEmpty(directory))
+                                Directory.CreateDirectory(directory);
+
+                            entry.ExtractToFile(fullPath, true);
+                        }
+                    }
+
+                    File.Delete(tempZipPath);
+                    progress.Report(LocalizationService.Instance["RepoUpdateSuccess"]);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"GitHub Zip download failed: {ex.Message}. Falling back to crawling.");
+                }
+            }
+
+            // Strategy 2: Crawling (Fallback)
+            await DownloadRepoByCrawlingAsync(progress);
+        }
+
+        private bool TryGetGitHubZipUrl(string baseUrl, out string zipUrl)
+        {
+            zipUrl = "";
+            // Expected format: https://raw.githubusercontent.com/{User}/{Repo}/refs/heads/{Branch}/
+            // Target format: https://github.com/{User}/{Repo}/archive/refs/heads/{Branch}.zip
+
+            if (baseUrl.Contains("raw.githubusercontent.com"))
+            {
+                var parts = baseUrl.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length >= 7)
+                {
+                    var user = parts[2];
+                    var repo = parts[3];
+                    var branch = parts[6];
+
+                    zipUrl = $"https://github.com/{user}/{repo}/archive/refs/heads/{branch}.zip";
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private async Task DownloadRepoByCrawlingAsync(IProgress<string> progress)
+        {
+            progress.Report(LocalizationService.Instance["DownloadingIndex"]);
+            var index = await GetGameIndexAsync();
+
+            // Save index
+            var indexJson = JsonSerializer.Serialize(index, AppJsonContext.Default.GameIndex);
+            await File.WriteAllBytesAsync(Path.Combine(REPO_BASE, "index.json"), System.Text.Encoding.UTF8.GetBytes(indexJson));
+
+            if (index.Games == null) return;
+
+            int total = index.Games.Count;
+            int current = 0;
+
+            foreach (var game in index.Games)
+            {
+                current++;
+                progress.Report(string.Format(LocalizationService.Instance["ProcessingGame"], current, total, game.GameName));
+
+                var assets = new List<string?>
+                {
+                    game.ConfigArchivePath,
+                    game.MigotoPath,
+                    game.ReshadePath,
+                    game.ShaderPath,
+                    game.ShaderMod,
+                    game.NativeReshadeDll,
+                    game.Images?.Icon,
+                    game.Images?.Logo,
+                    game.Images?.Wallpaper
+                };
+
+                foreach (var asset in assets)
+                {
+                    if (string.IsNullOrEmpty(asset)) continue;
+
+                    try
+                    {
+                        await DownloadFileToLocalRepoAsync(asset);
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace.WriteLine($"Failed to download asset {asset}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        private async Task DownloadFileToLocalRepoAsync(string relativeUrl)
+        {
+            if (relativeUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            string fullUrl = $"{_baseUrl}/{relativeUrl}";
+            string localPath = Path.Combine(REPO_BASE, relativeUrl);
+
+            var directory = Path.GetDirectoryName(localPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+            if (_httpClient != null)
+            {
+                var bytes = await _httpClient.GetByteArrayAsync(fullUrl);
+                await File.WriteAllBytesAsync(localPath, bytes);
+            }
         }
 
         public async Task<byte[]> DownloadImageAsync(string urlOrPath)
         {
-            // Determine effective source (Remote URL or Local Path)
-            string sourceUrl = urlOrPath;
             bool isAbsoluteUrl = urlOrPath.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                                  urlOrPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
             if (!isAbsoluteUrl)
             {
-                // Relative path? Combine with base
-                if (_isLocalPath)
+                var fullLocalPath = Path.Combine(REPO_BASE, urlOrPath);
+                if (File.Exists(fullLocalPath))
                 {
-                    // Local Repository Mode: Read directly from file
-                    var fullLocalPath = Path.Combine(_baseUrl, urlOrPath);
-                    if (File.Exists(fullLocalPath))
-                    {
-                        return await File.ReadAllBytesAsync(fullLocalPath);
-                    }
-                    else
-                    {
-                        Trace.WriteLine($"Local image not found: {fullLocalPath}");
-                        return Array.Empty<byte>();
-                    }
-                }
-                else
-                {
-                    // HTTP Repository Mode: Combine URL
-                    sourceUrl = $"{_baseUrl}/{urlOrPath}";
+                    return await File.ReadAllBytesAsync(fullLocalPath);
                 }
             }
 
-            // --- Caching Logic (Only for remote URLs) ---
-
-            // Cache directory relative to executable
-            var cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ImageCache");
-            if (!Directory.Exists(cacheDir))
+            if (!_isForceLocalMode && _httpClient != null)
             {
-                Directory.CreateDirectory(cacheDir);
-            }
-
-            // Generate filename from URL hash
-            var fileName = GetSafeFilename(sourceUrl);
-            var filePath = Path.Combine(cacheDir, fileName);
-
-            // 1. Try Cache
-            if (File.Exists(filePath))
-            {
-                return await File.ReadAllBytesAsync(filePath);
-            }
-
-            // 2. Try Download (Remote)
-            try
-            {
-                if (_httpClient == null)
+                try
                 {
-                    _httpClient = new HttpClient();
+                    string sourceUrl = isAbsoluteUrl ? urlOrPath : $"{_baseUrl}/{urlOrPath}";
+
+                    var cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ImageCache");
+                    Directory.CreateDirectory(cacheDir);
+                    var fileName = GetSafeFilename(sourceUrl);
+                    var cachePath = Path.Combine(cacheDir, fileName);
+
+                    if (File.Exists(cachePath)) return await File.ReadAllBytesAsync(cachePath);
+
+                    var bytes = await _httpClient.GetByteArrayAsync(sourceUrl);
+                    await File.WriteAllBytesAsync(cachePath, bytes);
+                    return bytes;
                 }
-
-                var bytes = await _httpClient.GetByteArrayAsync(sourceUrl);
-
-                // 3. Save to Cache
-                await File.WriteAllBytesAsync(filePath, bytes);
-                return bytes;
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"Online image download failed: {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Trace.WriteLine($"Download failed for {sourceUrl}: {ex.Message}");
-                throw;
-            }
+
+            return Array.Empty<byte>();
         }
 
         private string GetSafeFilename(string url)
@@ -144,40 +321,42 @@ namespace NewAxis.Services
             using (var sha = System.Security.Cryptography.SHA256.Create())
             {
                 var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(url));
-                return BitConverter.ToString(hash).Replace("-", "").ToLower() + ".png"; // Assume png or just data
+                return BitConverter.ToString(hash).Replace("-", "").ToLower() + ".png";
             }
         }
 
         public async Task DownloadFileAsync(string relativeUrl, string localPath)
         {
-            byte[] bytes;
-
-            if (_isLocalPath)
+            var repoPath = Path.Combine(REPO_BASE, relativeUrl);
+            if (File.Exists(repoPath))
             {
-                var sourcePath = Path.Combine(_baseUrl, relativeUrl);
-                Trace.WriteLine($"Copying local file: {sourcePath}");
-                bytes = await File.ReadAllBytesAsync(sourcePath);
+                Trace.WriteLine($"Copying from local repo: {repoPath}");
+                var dir = Path.GetDirectoryName(localPath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                File.Copy(repoPath, localPath, true);
+                return;
             }
-            else
+
+            if (!_isForceLocalMode && _httpClient != null)
             {
                 string fullUrl = relativeUrl;
                 if (!relativeUrl.StartsWith("http", StringComparison.InvariantCultureIgnoreCase))
                     fullUrl = $"{_baseUrl}/{relativeUrl}";
 
                 Trace.WriteLine($"Downloading file: {fullUrl}");
-                bytes = await _httpClient!.GetByteArrayAsync(fullUrl);
+                var bytes = await _httpClient.GetByteArrayAsync(fullUrl);
+
+                var directory = Path.GetDirectoryName(localPath);
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+                await File.WriteAllBytesAsync(localPath, bytes);
+                return;
             }
 
-            var directory = Path.GetDirectoryName(localPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            await File.WriteAllBytesAsync(localPath, bytes);
+            throw new FileNotFoundException($"File not found in local repo or online: {relativeUrl}");
         }
 
-        public bool IsLocalMode => _isLocalPath;
+        public bool IsLocalMode => _isForceLocalMode;
     }
 
     public class GameIndex
@@ -199,7 +378,6 @@ namespace NewAxis.Services
         public string? Creator { get; set; }
         public bool HasCustomConfig { get; set; }
 
-        // 3D Mod related properties
         public string? ShaderMod { get; set; }
         public string? MigotoPath { get; set; }
         public string? ReshadePath { get; set; }

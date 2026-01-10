@@ -224,6 +224,21 @@
                                  </StackPanel>
                              </Border>
                         </Border>
+
+                        <!-- Repo Update Overlay -->
+                        <Border Grid.RowSpan="2" Background="#AA000000" IsVisible="{Binding ShowRepoUpdatePrompt}">
+                             <Border Background="{DynamicResource SolidBackgroundFillColorBase}" CornerRadius="8" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="300">
+                                 <StackPanel Spacing="15">
+                                     <TextBlock Text="{Binding Localization[RepoUpdateAvailable]}" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center"/>
+                                     <TextBlock Text="{Binding Localization[RepoUpdatePromptMessage]}" TextWrapping="Wrap"  Foreground="#CCCCCC" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                     
+                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="20">
+                                         <Button Command="{Binding AcceptRepoUpdateCommand}" Content="{Binding Localization[Yes]}" Classes="primary" Padding="20,8"/>
+                                         <Button Command="{Binding DeclineRepoUpdateCommand}" Content="{Binding Localization[No]}" Padding="20,8"/>
+                                     </StackPanel>
+                                 </StackPanel>
+                             </Border>
+                        </Border>
                     </Grid>
                 </Border>
 
@@ -317,6 +332,11 @@
                         <CheckBox Content="{Binding Localization[InstallModTemp]}" IsChecked="{Binding InstallModTemporarily}"/>
                         <CheckBox Content="{Binding Localization[DisableDLSS]}" IsChecked="{Binding DisableDLSS}"/>
 
+                        <StackPanel Spacing="5">
+                            <TextBlock Text="{Binding Localization[ModRepoUrl]}"/>
+                            <TextBox Text="{Binding MOD_REPO_BASE}" HorizontalAlignment="Stretch"/>
+                        </StackPanel>
+
                         <StackPanel Spacing="10">
                             <TextBlock Text="{Binding Localization[Hotkeys]}" FontWeight="SemiBold"/>
                             <Grid ColumnDefinitions="*, *" RowDefinitions="Auto, Auto" Margin="0,5">
@@ -338,6 +358,8 @@
                                 </StackPanel>
                             </Grid>
                         </StackPanel>
+
+                        <Button Command="{Binding DownloadOfflineRepoCommand}" Content="{Binding Localization[DownloadOfflineRepo]}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,5"/>
 
                         <Grid ColumnDefinitions="Auto, *">
                              <Button Classes="resetBtn" Command="{Binding ResetDefaultsCommand}" Content="{Binding Localization[ResetDefaults]}" Background="Transparent" BorderBrush="#666666" BorderThickness="1" Foreground="#cccccc"/>

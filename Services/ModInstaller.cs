@@ -61,6 +61,23 @@ namespace NewAxis.Services
             {
                 fullExecutablePath = Path.Combine(gameInstallPath, executablePath);
             }
+            else if (!File.Exists(fullExecutablePath))
+            {
+                var executables = Directory.EnumerateFiles(gameInstallPath, "*.exe", SearchOption.AllDirectories)
+                    .Where(x => !Path.GetFileName(x).Contains("launch", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("web", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("crash", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("install", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("editor", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("physx", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("ENU", StringComparison.InvariantCultureIgnoreCase))
+                    .OrderByDescending(x => new FileInfo(x).Length);
+
+                if (executables.Any())
+                {
+                    fullExecutablePath = executables.First();
+                }
+            }
 
             Trace.WriteLine($"[ModInstaller] Installing {modType.GetDescription()} mod for {game.Name}...");
 

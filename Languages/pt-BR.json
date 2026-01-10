@@ -35,5 +35,16 @@
     "DisableDLSS": "Desabilitar DLSS",
     "Search": "Pesquisar",
     "SearchGames": "Pesquisar jogos...",
-    "GameRunning": "Em execução..."
+    "GameRunning": "Em execução...",
+    "RepoUpdateAvailable": "Atualização de Repositório Disponível",
+    "RepoUpdatePromptMessage": "Uma nova atualização de repositório está disponível. Deseja baixar agora para uso offline?",
+    "UpdatingRepository": "Atualizando Repositório...",
+    "DownloadOfflineRepo": "Baixar/Atualizar Repositório Offline",
+    "LargeDownloadWarning": "Isso pode levar alguns minutos...",
+    "DownloadingRepoArchive": "Baixando arquivo do repositório...",
+    "ExtractingRepo": "Extraindo repositório...",
+    "RepoUpdateSuccess": "Repositório atualizado com sucesso!",
+    "DownloadingIndex": "Baixando índice...",
+    "ProcessingGame": "Processando {0}/{1}: {2}",
+    "ModRepoUrl": "URL do Repositório de Mods"
 }

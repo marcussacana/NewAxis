@@ -52,11 +52,36 @@ public class LocalizationService : INotifyPropertyChanged
             _translations["en-US"] = _embeddedFallback;
         }
 
-        // Default to en-US if current not found, or first available
-        if (!AvailableLanguages.Contains(_currentLanguage))
+        // Default to System Language if supported, otherwise en-US
+        DetectSystemLanguage();
+    }
+
+    private void DetectSystemLanguage()
+    {
+        try
         {
-            _currentLanguage = AvailableLanguages.FirstOrDefault() ?? "en-US";
+            var sysName = System.Globalization.CultureInfo.CurrentUICulture.Name;
+
+            // 1. Exact match (e.g. pt-BR)
+            if (AvailableLanguages.Contains(sysName))
+            {
+                _currentLanguage = sysName;
+                return;
+            }
+
+            // 2. Primary language match (e.g. pt)
+            var primary = sysName.Split('-')[0];
+            var match = AvailableLanguages.FirstOrDefault(l => l.StartsWith(primary, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                _currentLanguage = match;
+                return;
+            }
         }
+        catch { }
+
+        // 3. Fallback
+        _currentLanguage = AvailableLanguages.Contains("en-US") ? "en-US" : (AvailableLanguages.FirstOrDefault() ?? "en-US");
     }
 
     private void LoadLanguages()
