@@ -46,5 +46,9 @@
   "RepoUpdateSuccess": "Репозиторій успішно оновлено!",
   "DownloadingIndex": "Завантаження індексу...",
   "ProcessingGame": "Обробка {0}/{1}: {2}",
-  "ModRepoUrl": "URL-адреса репозиторію модів"
+  "ModRepoUrl": "Спеціальна URL-адреса репозиторію модов",
+  "About": "Про програму",
+  "AboutTitle": "Про NewAxis",
+  "Licenses": "Ліцензії",
+  "Close": "Закрити"
 }

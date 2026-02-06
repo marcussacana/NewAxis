@@ -106,12 +106,10 @@ namespace NewAxis.Services
                 }
                 if (modType == ModType.ThreeDPlus)
                 {
-                    if (string.IsNullOrEmpty(gameEntry.ReshadePath) || string.IsNullOrEmpty(gameEntry.TargetDllFileName))
-                    {
-                        throw new Exception("ReshadePath or TargetDllFileName not configured");
-                    }
+                    // Hardcode reshade.zip for 3D+ as it's now static
+                    var reshadePath = "Global/Reshade/reshade.zip";
 
-                    var reshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.ReshadePath);
+                    var reshadeLocalPath = await DownloadFileAsync(repoClient, reshadePath);
 
                     string? shaderLocalPath = null;
                     if (!string.IsNullOrEmpty(gameEntry.ShaderPath))
@@ -130,6 +128,29 @@ namespace NewAxis.Services
                     });
 
                     installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
+
+                    // Install 3DGameBridge
+                    try
+                    {
+                        Trace.WriteLine("[ModInstaller] Installing 3DGameBridge...");
+
+                        var bridgeUrl = "Global/3DGameBridge.addon";
+                        Trace.WriteLine($"[ModInstaller] Downloading {bridgeUrl}...");
+                        var gameBridge = await DownloadFileAsync(repoClient, bridgeUrl);
+
+                        // Install 3DGameBridge.addon to game directory
+                        var bridgeDest = Path.Combine(targetDirectory, "3DGameBridge.addon");
+
+                        File.Copy(gameBridge, bridgeDest, true);
+                        installedFiles.Add(Path.GetRelativePath(gameInstallPath, bridgeDest));
+
+                        Trace.WriteLine($"[ModInstaller] ✓ Installed 3DGameBridge.addon to {bridgeDest}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace.WriteLine($"[ModInstaller] Failed to install 3DGameBridge: {ex}");
+                        System.Diagnostics.Debug.WriteLine($"[ModInstaller] Exception details: {ex.ToString()}");
+                    }
                 }
                 else if (modType == ModType.ThreeDUltra)
                 {

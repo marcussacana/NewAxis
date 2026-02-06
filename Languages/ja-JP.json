@@ -46,5 +46,9 @@
     "RepoUpdateSuccess": "リポジトリの更新に成功しました！",
     "DownloadingIndex": "インデックスをダウンロード中...",
     "ProcessingGame": "処理中 {0}/{1}: {2}",
-    "ModRepoUrl": "カスタムモッドリポジトリのURL"
+    "ModRepoUrl": "カスタムモッドリポジトリURL",
+    "About": "について",
+    "AboutTitle": "NewAxisについて",
+    "Licenses": "ライセンス",
+    "Close": "閉じる"
 }

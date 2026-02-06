@@ -6,7 +6,7 @@ namespace NewAxis.Services
 {
     public class UpdateInfo
     {
-        public int Version { get; set; }
+        public double Version { get; set; }
         public string? DownloadUrl { get; set; }
     }
 

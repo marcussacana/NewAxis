@@ -28,15 +28,18 @@ namespace NewAxis.Services
             if (inputIsLocal)
             {
                 _baseUrl = Path.GetFullPath(baseUrlOrPath);
+                REPO_BASE = _baseUrl; // Update REPO_BASE to match the local path
                 _isForceLocalMode = true;
             }
             else
             {
                 _baseUrl = baseUrlOrPath.TrimEnd('/', '\\');
-                _httpClient = new HttpClient();
-                _httpClient.Timeout = TimeSpan.FromSeconds(10); // Fast timeout for fallback
                 _isForceLocalMode = false;
             }
+
+            _httpClient = new HttpClient();
+            _httpClient.Timeout = TimeSpan.FromSeconds(10); // Fast timeout for fallback
+            _httpClient.DefaultRequestHeaders.Add("User-Agent", "NewAxis-Launcher");
 
             Trace.WriteLine($"Repository Mode: {(_isForceLocalMode ? "LOCAL-ONLY" : "HYBRID (Online -> Local)")}");
             Trace.WriteLine($"Base URL: {_baseUrl}");
@@ -288,9 +291,13 @@ namespace NewAxis.Services
                 {
                     return await File.ReadAllBytesAsync(fullLocalPath);
                 }
+                else
+                {
+                    Trace.WriteLine($"[GameRepositoryClient] Image not found local: {fullLocalPath}");
+                }
             }
 
-            if (!_isForceLocalMode && _httpClient != null)
+            if (_httpClient != null && (isAbsoluteUrl || !_isForceLocalMode))
             {
                 try
                 {
@@ -335,6 +342,10 @@ namespace NewAxis.Services
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 File.Copy(repoPath, localPath, true);
                 return;
+            }
+            else
+            {
+                Trace.WriteLine($"[GameRepositoryClient] File not found local: {Path.GetFullPath(repoPath)}");
             }
 
             if (!_isForceLocalMode && _httpClient != null)

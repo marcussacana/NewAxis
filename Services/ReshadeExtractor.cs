@@ -27,6 +27,8 @@ namespace NewAxis.Services
 
     public class ReshadeExtractor
     {
+        private static readonly string[] ObsoleteFilePatterns = { "SpatialLabs", "Acer", "slt", "Depth3D" };
+
         /// <summary>
         /// Extracts Reshade from a 7z archive to the game directory
         /// </summary>
@@ -58,7 +60,7 @@ namespace NewAxis.Services
             {
                 await ExtractArchiveByArchitectureAsync(context.Reshade7zPath, fullExePath, tempExtractDir);
 
-                var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, context.GameEntry.TargetDllFileName ?? "dxgi.dll");
+                var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, context.GameEntry.TargetDllFileName ?? "dxgi.dll", true);
                 installedFiles.AddRange(extractedFiles);
 
                 if (!string.IsNullOrEmpty(context.GameEntry.ReshadePresetPlus))
@@ -133,26 +135,75 @@ namespace NewAxis.Services
             string archFolder = is64Bit ? "x64" : "x32";
             string archFolderPrefix = $"{archFolder}/";
 
-            Trace.WriteLine($"[ReshadeManager] Detected architecture: {archFolder}");
+            Trace.WriteLine($"[ReshadeManager] Detecting files for architecture: {archFolder}");
 
             await Task.Run(() =>
             {
                 using (var archive = ArchiveFactory.Open(archivePath))
                 {
+                    Trace.WriteLine($"[ReshadeManager] Archive opened: {archivePath}");
+                    Trace.WriteLine($"[ReshadeManager] Entries count: {archive.Entries.Count()}");
+                    foreach (var entry in archive.Entries)
+                    {
+                        Trace.WriteLine($"[ReshadeManager]   - Entry: {entry.Key} (IsDir: {entry.IsDirectory}, Size: {entry.Size})");
+                    }
+
+                    string normalizedPrefix = archFolderPrefix.Replace('\\', '/').ToLowerInvariant();
+                    Trace.WriteLine($"[ReshadeManager] Searching for prefix: {normalizedPrefix}");
+
+                    // Try to find files in the x64/x32 folders first
                     var filesToExtract = archive.Entries
-                        .Where(e => !e.IsDirectory && e.Key != null && e.Key.StartsWith(archFolderPrefix))
+                        .Where(e => !e.IsDirectory && e.Key != null)
+                        .Where(e => e.Key.Replace('\\', '/').ToLowerInvariant().StartsWith(normalizedPrefix))
                         .ToList();
+
+                    bool foundInFolder = filesToExtract.Any();
+
+                    if (!foundInFolder)
+                    {
+                        Trace.WriteLine($"[ReshadeManager] {archFolder} folder not found in archive. Searching root for architecture-specific files...");
+                        
+                        // If folders are missing, we look for ReShade64.dll/ReShade32.dll at the root
+                        // and take all files that aren't other architecture's specific files
+                        var otherDllMatch = is64Bit ? "32" : "64";
+
+                        filesToExtract = archive.Entries
+                            .Where(e => !e.IsDirectory && e.Key != null)
+                            .Where(e => !e.Key.Contains('/') && !e.Key.Contains('\\')) // Only root files
+                            .Where(e => !e.Key.Contains(otherDllMatch)) // Exclude other architecture files
+                            .ToList();
+                    }
 
                     if (filesToExtract.Count == 0)
                     {
-                        throw new Exception($"No files found in {archFolder} folder of archive");
+                        throw new Exception($"Could not find any suitable ReShade files for {archFolder} in the archive.");
                     }
 
-                    Trace.WriteLine($"[ReshadeManager] Extracting {filesToExtract.Count} files from {archFolder}...");
+                    Trace.WriteLine($"[ReshadeManager] Found {filesToExtract.Count} files to extract.");
 
                     foreach (var entry in filesToExtract)
                     {
-                        var relativePath = entry.Key!.Substring(archFolderPrefix.Length);
+                        string entryKey = entry.Key!;
+                        string relativePath;
+                        
+                        if (foundInFolder)
+                        {
+                            // Remove prefix more safely
+                            string normalizedKey = entryKey.Replace('\\', '/');
+                            if (normalizedKey.ToLowerInvariant().StartsWith(normalizedPrefix))
+                            {
+                                relativePath = entryKey.Substring(archFolderPrefix.Length).TrimStart('/', '\\');
+                            }
+                            else
+                            {
+                                relativePath = entryKey;
+                            }
+                        }
+                        else
+                        {
+                            relativePath = entryKey;
+                        }
+
                         var extractPath = Path.Combine(outputDir, relativePath);
 
                         var dir = Path.GetDirectoryName(extractPath);
@@ -161,6 +212,7 @@ namespace NewAxis.Services
                             Directory.CreateDirectory(dir);
                         }
 
+                        Trace.WriteLine($"[ReshadeManager] Extracting: {entryKey} -> {relativePath}");
                         using (var entryStream = entry.OpenEntryStream())
                         using (var fileStream = File.Create(extractPath))
                         {
@@ -171,47 +223,61 @@ namespace NewAxis.Services
             });
         }
 
-        private static List<string> InstallExtractedFiles(string sourceDir, string targetDir, string targetDllName)
+        private static List<string> InstallExtractedFiles(string sourceDir, string targetDir, string targetDllName, bool excludeSpatialLabs = false)
         {
             var installedFiles = new List<string>();
 
-            // Find the main Reshade DLL
-            var dllFiles = Directory.GetFiles(sourceDir, "*.dll", SearchOption.TopDirectoryOnly);
+            // Find all files recursively in the temp directory to ensure we don't miss anything
+            var allFiles = Directory.GetFiles(sourceDir, "*.*", SearchOption.AllDirectories);
+            Trace.WriteLine($"[ReshadeManager] Found {allFiles.Length} extracted files in temp directory:");
+            foreach (var f in allFiles) Trace.WriteLine($"[ReshadeManager]   - {f}");
+
+            Directory.CreateDirectory(targetDir);
+
+            // Separate DLLs and other files
+            var dllFiles = allFiles.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                .Where(f => !excludeSpatialLabs || !ObsoleteFilePatterns.Any(p => Path.GetFileName(f).Contains(p, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+
+            var otherFiles = allFiles.Where(f => !f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                .Where(f => !excludeSpatialLabs || !ObsoleteFilePatterns.Any(p => Path.GetFileName(f).Contains(p, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+
             if (dllFiles.Length == 0)
             {
                 throw new Exception("No DLL files found in extracted archive");
             }
 
-            Directory.CreateDirectory(targetDir);
-
+            // Handle DLLs
             foreach (var srcDll in dllFiles)
             {
                 var fileName = Path.GetFileName(srcDll);
                 string targetPath;
 
-                // Rename the main DLL (typically named reshade.dll)
+                // Rename the main DLL (typically named ReShade64.dll or ReShade32.dll now)
                 if (fileName.Contains("reshade", StringComparison.OrdinalIgnoreCase) || dllFiles.Length == 1)
                 {
                     targetPath = Path.Combine(targetDir, targetDllName);
-                    Trace.WriteLine($"[ReshadeManager] Copying and renaming {fileName} -> {targetDllName}");
+                    Trace.WriteLine($"[ReshadeManager] Installing main DLL: {fileName} -> {targetDllName}");
                 }
                 else
                 {
                     // Keep original name for supporting DLLs
                     targetPath = Path.Combine(targetDir, fileName);
-                    Trace.WriteLine($"[ReshadeManager] Copying {fileName}");
+                    Trace.WriteLine($"[ReshadeManager] Installing supporting DLL: {fileName}");
                 }
 
                 File.Copy(srcDll, targetPath, true);
                 installedFiles.Add(targetPath);
             }
 
-            // Copy any other non-DLL files
-            var otherFiles = Directory.GetFiles(sourceDir).Where(f => !f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase));
+            // Handle Other Files
             foreach (var srcFile in otherFiles)
             {
                 var fileName = Path.GetFileName(srcFile);
                 var targetPath = Path.Combine(targetDir, fileName);
+                
+                Trace.WriteLine($"[ReshadeManager] Installing file: {fileName}");
                 File.Copy(srcFile, targetPath, true);
                 installedFiles.Add(targetPath);
             }
@@ -252,10 +318,10 @@ namespace NewAxis.Services
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("PreprocessorDefinitions = ");
-            sb.AppendLine("Techniques = Depth3D_Acer@SpatialLabs_Depth3D.fx");
-            sb.AppendLine("TechniqueSorting = Depth3D_Acer@SpatialLabs_Depth3D.fx");
+            sb.AppendLine("Techniques = rendepth@Rendepth.fx");
+            sb.AppendLine("TechniqueSorting = rendepth@Rendepth.fx");
             sb.AppendLine();
-            sb.AppendLine("[SpatialLabs_Depth3D.fx]");
+            sb.AppendLine("[Rendepth.fx]");
             sb.AppendLine(presetData);
 
             return sb.ToString();
@@ -356,6 +422,9 @@ namespace NewAxis.Services
                 // [DEPTH] Section
                 if (heuristics.HasValue) parser.SetValue("DEPTH", "UseAspectRatioHeuristics", heuristics.Value.ToString());
                 if (depthCopy.HasValue) parser.SetValue("DEPTH", "DepthCopyBeforeClears", depthCopy.Value.ToString());
+
+                // [3DGameBridge.addon] Section - Ensure it's enabled if present
+                parser.SetValue("3DGameBridge.addon", "Enabled", "1");
             }
 
             parser.Save(iniPath);

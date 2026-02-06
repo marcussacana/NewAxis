@@ -46,5 +46,9 @@
     "RepoUpdateSuccess": "Repositório atualizado com sucesso!",
     "DownloadingIndex": "Baixando índice...",
     "ProcessingGame": "Processando {0}/{1}: {2}",
-    "ModRepoUrl": "URL do Repositório de Mods"
+    "ModRepoUrl": "URL do Repositório de Mods",
+    "About": "Sobre",
+    "AboutTitle": "Sobre o NewAxis",
+    "Licenses": "Licenças",
+    "Close": "Fechar"
 }

@@ -8,7 +8,8 @@ namespace NewAxis;
 
 class Program
 {
-    public const int CurrentVersion = 12;
+    public static double CurrentVersion = 12;
+    public static string? CustomRepoPath { get; private set; }
 
     [STAThread]
     public static void Main(string[] args)
@@ -19,6 +20,14 @@ class Program
         {
             Trace.Listeners.Add(new TextWriterTraceListener(File.CreateText("NewAxis.log")));
             Trace.AutoFlush = true;
+        }
+
+        // Parse --repo-path argument
+        var repoPathArg = args?.FirstOrDefault(x => x.StartsWith("--repo-path=", StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(repoPathArg))
+        {
+            CustomRepoPath = repoPathArg.Substring("--repo-path=".Length);
+            Trace.WriteLine($"Custom repository path from args: {CustomRepoPath}");
         }
 
         if (Services.UpdateManager.HandleUpdateArgs(args))

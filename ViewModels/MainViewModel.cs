@@ -19,6 +19,25 @@ public class MainViewModel : ViewModelBase
     public string UPDATE_REPO_BASE = "https://raw.githubusercontent.com/marcussacana/NewAxis/refs/heads/updater/";
     public LocalizationService Localization => LocalizationService.Instance;
 
+    public string LauncherVersion
+    {
+        get
+        {
+            double version = Program.CurrentVersion;
+            int wholePart = (int)version;
+            int v1 = wholePart / 10;
+            int v2 = wholePart % 10;
+            int v3 = (int)Math.Round((version - wholePart) * 10);
+
+            if (v3 > 0)
+                return $"{v1}.{v2}.{v3}";
+
+            return $"{v1}.{v2}";
+        }
+    }
+
+    public string WindowTitle => $"NewAxis 3D Manager v{LauncherVersion}";
+
     private const string DEFAULT_MOD_REPO = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
     private string _appliedRepoUrl = DEFAULT_MOD_REPO;
 
@@ -87,19 +106,44 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            if (game.Tag is GameIndexEntry indexEntry && indexEntry.Images != null)
+            if (game.Tag is GameIndexEntry indexEntry)
             {
-                if (!string.IsNullOrEmpty(indexEntry.Images.Wallpaper))
+                string? wallpaperUrl = indexEntry.Images?.Wallpaper;
+                string? logoUrl = indexEntry.Images?.Logo;
+
+                if (!string.IsNullOrEmpty(wallpaperUrl))
                 {
                     Trace.WriteLine($"Downloading banner for {game.Name}");
-                    game.BannerImage = await LoadImageAsync(indexEntry.Images.Wallpaper);
+                    game.BannerImage = await LoadImageAsync(wallpaperUrl);
                 }
 
-                if (!string.IsNullOrEmpty(indexEntry.Images.Logo))
+                // Fallback for Wallpaper (if missing or failed to decode)
+                if (game.BannerImage == null && !string.IsNullOrEmpty(indexEntry.SteamAppId))
+                {
+                    string steamUrl = $"https://steamcdn-a.akamaihd.net/steam/apps/{indexEntry.SteamAppId}/library_hero.jpg";
+                    if (wallpaperUrl != steamUrl)
+                    {
+                        Trace.WriteLine($"Banner failed or missing, trying Steam fallback for {game.Name}");
+                        game.BannerImage = await LoadImageAsync(steamUrl);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(logoUrl))
                 {
                     Trace.WriteLine($"Downloading logo for {game.Name}");
-                    var logoImg = await LoadImageAsync(indexEntry.Images.Logo, autoCropTransparency: true, gameInstance: game);
+                    var logoImg = await LoadImageAsync(logoUrl, autoCropTransparency: true, gameInstance: game);
                     game.LogoImage = logoImg;
+                }
+
+                // Fallback for Logo (if missing or failed to decode)
+                if (game.LogoImage == null && !string.IsNullOrEmpty(indexEntry.SteamAppId))
+                {
+                    string steamUrl = $"https://steamcdn-a.akamaihd.net/steam/apps/{indexEntry.SteamAppId}/logo.png";
+                    if (logoUrl != steamUrl)
+                    {
+                        Trace.WriteLine($"Logo failed or missing, trying Steam fallback for {game.Name}");
+                        game.LogoImage = await LoadImageAsync(steamUrl, autoCropTransparency: true, gameInstance: game);
+                    }
                 }
 
                 Trace.WriteLine($"Images loaded for {game.Name}");
@@ -323,12 +367,21 @@ public class MainViewModel : ViewModelBase
     public ICommand ToggleHiddenGamesCommand { get; }
     public ICommand ApplySettingsCommand { get; }
     public ICommand ResetDefaultsCommand { get; }
+    public ICommand ToggleAboutCommand { get; }
+    public ICommand OpenUrlCommand { get; }
 
     private bool _isSettingsOpen;
     public bool IsSettingsOpen
     {
         get => _isSettingsOpen;
         set => SetField(ref _isSettingsOpen, value);
+    }
+
+    private bool _isAboutOpen;
+    public bool IsAboutOpen
+    {
+        get => _isAboutOpen;
+        set => SetField(ref _isAboutOpen, value);
     }
 
     private bool _showUninstalledGames = true;
@@ -352,7 +405,7 @@ public class MainViewModel : ViewModelBase
         set
         {
             if (SetField(ref _searchQuery, value))
-                RefreshGamesList();
+                _ = RefreshGamesListAsync();
         }
     }
 
@@ -447,10 +500,23 @@ public class MainViewModel : ViewModelBase
         LoadConfig();
 
         _allGames = new List<Game>();
-        _appliedRepoUrl = _modRepoUrl;
-        _repoClient = new GameRepositoryClient(_appliedRepoUrl);
 
-        RefreshGamesList();
+        // Use command-line argument if provided, otherwise use config
+        if (!string.IsNullOrEmpty(Program.CustomRepoPath))
+        {
+            _appliedRepoUrl = Program.CustomRepoPath;
+            var fullPath = Path.GetFullPath(_appliedRepoUrl);
+            Trace.WriteLine($"[MainViewModel] CWD: {Directory.GetCurrentDirectory()}");
+            Trace.WriteLine($"[MainViewModel] Custom Repo Relative: {_appliedRepoUrl}");
+            Trace.WriteLine($"[MainViewModel] Custom Repo Absolute: {fullPath}");
+            Trace.WriteLine($"[MainViewModel] Repo Dir Exists: {Directory.Exists(fullPath)}");
+        }
+        else
+        {
+            _appliedRepoUrl = _modRepoUrl;
+        }
+
+        _repoClient = new GameRepositoryClient(_appliedRepoUrl);
 
         _ = LoadGamesFromRepositoryAsync();
 
@@ -462,6 +528,21 @@ public class MainViewModel : ViewModelBase
         ToggleHiddenGamesCommand = new RelayCommand(ExecuteToggleHiddenGames);
         ApplySettingsCommand = new RelayCommand(ExecuteApplySettings);
         ResetDefaultsCommand = new RelayCommand(ExecuteResetDefaults);
+        ToggleAboutCommand = new RelayCommand(_ => IsAboutOpen = !IsAboutOpen);
+        OpenUrlCommand = new RelayCommand(url =>
+        {
+            if (url is string s && !string.IsNullOrWhiteSpace(s))
+            {
+                try
+                {
+                    Process.Start(new ProcessStartInfo(s) { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"Error opening URL: {ex.Message}");
+                }
+            }
+        });
 
         AcceptUpdateCommand = new RelayCommand(ExecuteAcceptUpdate);
         DeclineUpdateCommand = new RelayCommand(_ => ShowUpdatePrompt = false);
@@ -621,11 +702,13 @@ public class MainViewModel : ViewModelBase
 
     private async Task LoadGamesFromRepositoryAsync()
     {
+        if (_repoClient == null) return;
+
         try
         {
             IsLoadingGames = true;
             _allGames.Clear();
-            RefreshGamesList();
+            _ = RefreshGamesListAsync();
 
             var index = await _repoClient.GetGameIndexAsync();
 
@@ -653,7 +736,7 @@ public class MainViewModel : ViewModelBase
                     }
                 }
 
-                RefreshGamesList();
+                _ = RefreshGamesListAsync();
 
                 await Task.Run(async () =>
                 {
@@ -676,10 +759,7 @@ public class MainViewModel : ViewModelBase
                                 _allGames.Add(game);
 
                                 // Incremental UI Update
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    RefreshGamesList();
-                                });
+                                _ = RefreshGamesListAsync();
                             }
                             else
                             {
@@ -697,8 +777,8 @@ public class MainViewModel : ViewModelBase
 
             _allGames.AddRange(notFoundGames);
 
+            await RefreshGamesListAsync();
             IsLoadingGames = false;
-            RefreshGamesList();
             SaveConfig();
 
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
@@ -715,7 +795,7 @@ public class MainViewModel : ViewModelBase
 
             SetLoadingOverlay(false, null, false);
 
-            RefreshGamesList();
+            _ = RefreshGamesListAsync();
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
         }
     }
@@ -840,6 +920,7 @@ public class MainViewModel : ViewModelBase
     }
 
     private List<Game> _allGames;
+    private System.Threading.CancellationTokenSource? _refreshCts;
 
     private async Task LoadGameIconAsync(Game game)
     {
@@ -847,36 +928,76 @@ public class MainViewModel : ViewModelBase
 
         try
         {
-            if (game.Tag is GameIndexEntry indexEntry && !string.IsNullOrEmpty(indexEntry.Images?.Icon))
+            if (game.Tag is GameIndexEntry indexEntry)
             {
-                game.IconImage = await LoadImageAsync(indexEntry.Images.Icon);
+                string? iconUrl = indexEntry.Images?.Icon;
+
+                if (!string.IsNullOrEmpty(iconUrl))
+                {
+                    game.IconImage = await LoadImageAsync(iconUrl);
+                }
+
+                // Fallback for Icon (if missing or failed to decode)
+                if (game.IconImage == null && !string.IsNullOrEmpty(indexEntry.SteamAppId))
+                {
+                    string steamUrl = $"https://steamcdn-a.akamaihd.net/steam/apps/{indexEntry.SteamAppId}/library_600x900_2x.jpg";
+                    if (iconUrl != steamUrl)
+                    {
+                        Trace.WriteLine($"Icon failed or missing, trying Steam fallback for {game.Name}");
+                        game.IconImage = await LoadImageAsync(steamUrl);
+                    }
+                }
             }
         }
         catch { }
     }
 
-    private void RefreshGamesList()
+    private async Task RefreshGamesListAsync()
     {
+        _refreshCts?.Cancel();
+        _refreshCts = new System.Threading.CancellationTokenSource();
+        var token = _refreshCts.Token;
+
         var currentSelection = SelectedGame;
+
+        var filteredGames = await Task.Run(() =>
+        {
+            return _allGames
+                .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) &&
+                            (ShowUninstalledGames || g.IsInstalled) &&
+                            (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(g => g.Name)
+                .ToList();
+        }, token);
+
+        if (token.IsCancellationRequested) return;
+
         Games.Clear();
 
-        var filteredGames = _allGames
-            .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) &&
-                        (ShowUninstalledGames || g.IsInstalled) &&
-                        (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
-            .OrderBy(g => g.Name);
+        // Determine batch size based on whether icons are already loaded
+        // If most games have icons cached, we can use a larger batch size
+        int iconsLoaded = filteredGames.Count(g => g.IconImage != null);
+        bool mostIconsCached = filteredGames.Count > 0 && ((double)iconsLoaded / filteredGames.Count) > 0.5;
+        int batchSize = mostIconsCached ? 10 : 2;
 
-        foreach (var game in filteredGames)
+        for (int i = 0; i < filteredGames.Count; i++)
         {
-            Games.Add(game);
-            _ = LoadGameIconAsync(game);
+            if (token.IsCancellationRequested) return;
+
+            Games.Add(filteredGames[i]);
+            _ = LoadGameIconAsync(filteredGames[i]);
+
+            if ((i + 1) % batchSize == 0)
+            {
+                await Task.Delay(100, token); // Yield to UI thread
+            }
         }
 
         if (currentSelection != null && Games.Contains(currentSelection))
         {
             SelectedGame = currentSelection;
         }
-        else
+        else if (Games.Count > 0)
         {
             SelectedGame = Games.FirstOrDefault();
         }
@@ -885,7 +1006,7 @@ public class MainViewModel : ViewModelBase
     private void ExecuteToggleHiddenGames(object? obj)
     {
         ShowUninstalledGames = !ShowUninstalledGames;
-        RefreshGamesList();
+        _ = RefreshGamesListAsync();
         SaveConfig();
     }
 
@@ -1013,6 +1134,8 @@ public class MainViewModel : ViewModelBase
                     steamUrl += "//" + launchArgs;
                 }
 
+                Trace.WriteLine($"Launching Steam game: {steamUrl}");
+
                 process = Process.Start(new ProcessStartInfo
                 {
                     FileName = steamUrl,
@@ -1039,6 +1162,8 @@ public class MainViewModel : ViewModelBase
                         return;
                     }
                 }
+
+                Trace.WriteLine($"Starting game: {exePath}");
 
                 var startInfo = new ProcessStartInfo
                 {
@@ -1165,7 +1290,7 @@ public class MainViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(path))
             {
                 SelectedGame.InstallPath = path;
-                RefreshGamesList();
+                _ = RefreshGamesListAsync();
                 SaveConfig();
             }
         }
@@ -1177,7 +1302,7 @@ public class MainViewModel : ViewModelBase
         if (SelectedGame != null)
         {
             SelectedGame.InstallPath = string.Empty;
-            RefreshGamesList();
+            _ = RefreshGamesListAsync();
             SaveConfig();
         }
     }
@@ -1346,4 +1471,67 @@ public class MainViewModel : ViewModelBase
 
         return 0;
     }
+
+    public string RendepthLicense => @"MIT License
+
+Copyright (c) 2025 Outmode
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the ""Software""), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED ""AS IS"", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.";
+
+    public string ReshadeLicense => @"Copyright (c) 2014, Patrick Mours
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ""AS IS""
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.";
+
+    public string MigotoLicenseHeader => "The source code of 3Dmigoto is released under the GPLv3 license - refer to ";
+    public string MigotoLicenseLink => "https://github.com/bo3b/3Dmigoto/blob/master/LICENSE.GPL.txt";
+    public string MigotoLicenseFooter => @" for details.
+
+Any shaders distributed along with 3Dmigoto as part of game fixes are not
+covered by the license of 3Dmigoto, and are owned by their respective copyright
+holders - these are modified and distributed in good faith for the sole purpose
+of fixing problems in the original games.
+
+3Dmigoto makes use of the Deviare-InProcess library from Nektra, which is
+licensed under the General Public License version 3 - refer to LICENSE.GPL.txt
+for details.";
 }
