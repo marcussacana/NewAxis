@@ -4,9 +4,17 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>NewAxis</AssemblyName>
+    <RootNamespace>NewAxis</RootNamespace>
+    <AssemblyTitle>NewAxis Launcher</AssemblyTitle>
+    <Product>NewAxis Launcher</Product>
+    <Description>NewAxis LeiaSR Viewer and Video Player</Description>
+    <Company>NewAxis Project</Company>
+    <Copyright>Copyright (c) NewAxis Project</Copyright>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <PublishAot>true</PublishAot>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,13 +31,26 @@
     <PackageReference Include="Material.Icons.Avalonia" Version="2.4.1" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="SharpCompress" Version="0.42.1" />
+    <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="SharpGLTF.Core" Version="1.0.0-beta9" />
   </ItemGroup>
 
 
 
   <ItemGroup>
     <None Include="Languages\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <EmbeddedResource Include="Resources\Shaders\**\*.glsl" />
+    <None Include="Resources\shaders.rc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copy Leia3DBridge DLL -->
+    <None Include="..\Leia3DBridge\Leia3DBridge.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

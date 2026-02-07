@@ -1,0 +1,2 @@
+VERTEX_SHADER RCDATA "Shaders\\vertex.glsl"
+FRAGMENT_SHADER RCDATA "Shaders\\fragment.glsl"

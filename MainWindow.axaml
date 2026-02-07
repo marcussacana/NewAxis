@@ -5,7 +5,6 @@
         xmlns:vm="using:NewAxis.ViewModels"
         xmlns:models="using:NewAxis.Models"
         xmlns:conv="using:Avalonia.Data.Converters"
-        xmlns:material="using:Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
         x:Class="NewAxis.MainWindow"
         x:Name="Root"
@@ -132,6 +131,20 @@
                                           IsVisible="{Binding !ShowUninstalledGames}"
                                           ToolTip.Tip="{Binding Localization[ToggleUninstalled]}"/>
                                 </Grid>
+                            </Button>
+                            <Button Classes="icon" Command="{Binding Open3dViewCommand}" Background="Transparent" 
+                                    Width="30" Height="30" Padding="0" Foreground="White"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                <Path Data="M12,2L2,7V17L12,22L22,17V7M12,4.18L18.74,7.55L12,10.92L5.26,7.55M4,9.16L11,12.66V19.39L4,15.89M20,15.89L13,19.39V12.66L20,9.16Z"
+                                      Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="18" Height="18"
+                                      ToolTip.Tip="{Binding Localization[Open3DViewer]}"/>
+                            </Button>
+                            <Button Classes="icon" Command="{Binding OpenVideoPlayerCommand}" Background="Transparent" 
+                                    Width="30" Height="30" Padding="0" Foreground="White"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                                <Path Data="M8,5V19L19,12M21,3H3A2,2 0 0,0 1,5V19A2,2 0 0,0 3,21H21A2,2 0 0,0 23,19V5A2,2 0 0,0 21,3Z"
+                                      Fill="{Binding $parent[Button].Foreground}" Stretch="Uniform" Width="18" Height="18"
+                                      ToolTip.Tip="{Binding Localization[Open3DVideoPlayer]}"/>
                             </Button>
                             <Button Classes="icon" Command="{Binding ToggleSettingsCommand}" Background="Transparent" 
                                     Width="30" Height="30" Padding="0" Foreground="White"
@@ -287,12 +300,7 @@
                         <TextBlock Text="{Binding Localization[ActiveMod]}" Opacity="0.7"/>
                         <TextBlock Text="{Binding SelectedMod}" FontWeight="Bold" FontSize="16"/>
                         <TextBlock Text="{Binding Localization[By]}" Opacity="0.7" Margin="10,0,0,0"/>
-                        <Panel>
-                            <TextBlock Text="{Binding SelectedGame.Creator}" FontStyle="Italic" 
-                                       IsVisible="{Binding SelectedGame.Creator, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
-                            <TextBlock Text="{Binding Localization[UnknownCreator]}" FontStyle="Italic"
-                                       IsVisible="{Binding SelectedGame.Creator, Converter={x:Static conv:StringConverters.IsNullOrEmpty}}"/>
-                        </Panel>
+                        <TextBlock Text="{Binding DisplayedCreator}" FontStyle="Italic"/>
                     </StackPanel>
                 </StackPanel>
 

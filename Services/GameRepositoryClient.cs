@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia;
@@ -13,6 +15,13 @@ namespace NewAxis.Services
 {
     public class GameRepositoryClient
     {
+        private const int MaxSplitPartsProbe = 64;
+        private static readonly string[] GlobalRuntimeAssets =
+        {
+            "Global/Runtime/Leia/Leia3DBridge.dll",
+            "Global/Runtime/VideoPlayer/libmpv-2.dll"
+        };
+
         public string REPO_BASE = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ModRepository");
 
         private HttpClient? _httpClient;
@@ -220,6 +229,19 @@ namespace NewAxis.Services
             var indexJson = JsonSerializer.Serialize(index, AppJsonContext.Default.GameIndex);
             await File.WriteAllBytesAsync(Path.Combine(REPO_BASE, "index.json"), System.Text.Encoding.UTF8.GetBytes(indexJson));
 
+            // Always attempt known global runtime assets used by 3D viewer and video player.
+            foreach (var runtimeAsset in GlobalRuntimeAssets)
+            {
+                try
+                {
+                    await DownloadFileToLocalRepoAsync(runtimeAsset);
+                }
+                catch (Exception ex)
+                {
+                    Trace.WriteLine($"Failed to download runtime asset {runtimeAsset}: {ex.Message}");
+                }
+            }
+
             if (index.Games == null) return;
 
             int total = index.Games.Count;
@@ -266,17 +288,14 @@ namespace NewAxis.Services
                 return;
             }
 
-            string fullUrl = $"{_baseUrl}/{relativeUrl}";
             string localPath = Path.Combine(REPO_BASE, relativeUrl);
-
             var directory = Path.GetDirectoryName(localPath);
-            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-
-            if (_httpClient != null)
+            if (!string.IsNullOrEmpty(directory))
             {
-                var bytes = await _httpClient.GetByteArrayAsync(fullUrl);
-                await File.WriteAllBytesAsync(localPath, bytes);
+                Directory.CreateDirectory(directory);
             }
+
+            await DownloadFileAsync(relativeUrl, localPath);
         }
 
         public async Task<byte[]> DownloadImageAsync(string urlOrPath)
@@ -334,37 +353,276 @@ namespace NewAxis.Services
 
         public async Task DownloadFileAsync(string relativeUrl, string localPath)
         {
-            var repoPath = Path.Combine(REPO_BASE, relativeUrl);
-            if (File.Exists(repoPath))
+            bool isAbsoluteUrl = relativeUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                                 relativeUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+            var directory = Path.GetDirectoryName(localPath);
+            if (!string.IsNullOrEmpty(directory))
             {
-                Trace.WriteLine($"Copying from local repo: {repoPath}");
-                var dir = Path.GetDirectoryName(localPath);
-                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                File.Copy(repoPath, localPath, true);
-                return;
+                Directory.CreateDirectory(directory);
             }
-            else
+
+            if (!isAbsoluteUrl)
             {
+                var repoPath = Path.Combine(REPO_BASE, relativeUrl);
+                if (File.Exists(repoPath))
+                {
+                    string fullRepoPath = Path.GetFullPath(repoPath);
+                    string fullLocalPath = Path.GetFullPath(localPath);
+                    if (string.Equals(fullRepoPath, fullLocalPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Trace.WriteLine($"[GameRepositoryClient] File already available in local repo: {fullRepoPath}");
+                        return;
+                    }
+
+                    Trace.WriteLine($"Copying from local repo: {repoPath}");
+                    File.Copy(repoPath, localPath, true);
+                    return;
+                }
+
+                if (await TryMergeSplitFileFromLocalRepoAsync(repoPath, relativeUrl, localPath))
+                {
+                    return;
+                }
+
                 Trace.WriteLine($"[GameRepositoryClient] File not found local: {Path.GetFullPath(repoPath)}");
             }
 
             if (!_isForceLocalMode && _httpClient != null)
             {
-                string fullUrl = relativeUrl;
-                if (!relativeUrl.StartsWith("http", StringComparison.InvariantCultureIgnoreCase))
-                    fullUrl = $"{_baseUrl}/{relativeUrl}";
+                string fullUrl = isAbsoluteUrl ? relativeUrl : $"{_baseUrl}/{relativeUrl}";
 
-                Trace.WriteLine($"Downloading file: {fullUrl}");
-                var bytes = await _httpClient.GetByteArrayAsync(fullUrl);
-
-                var directory = Path.GetDirectoryName(localPath);
-                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
-
-                await File.WriteAllBytesAsync(localPath, bytes);
-                return;
+                try
+                {
+                    Trace.WriteLine($"Downloading file: {fullUrl}");
+                    var bytes = await _httpClient.GetByteArrayAsync(fullUrl);
+                    await File.WriteAllBytesAsync(localPath, bytes);
+                    return;
+                }
+                catch (HttpRequestException ex) when (!isAbsoluteUrl && ex.StatusCode == HttpStatusCode.NotFound)
+                {
+                    Trace.WriteLine($"[GameRepositoryClient] Direct file missing online, trying split parts: {relativeUrl}");
+                    if (await TryMergeSplitFileFromRemoteAsync(relativeUrl, localPath))
+                    {
+                        return;
+                    }
+                }
             }
 
             throw new FileNotFoundException($"File not found in local repo or online: {relativeUrl}");
+        }
+
+        private async Task<bool> TryMergeSplitFileFromLocalRepoAsync(string repoPath, string relativeUrl, string localPath)
+        {
+            var splitParts = FindLocalSplitParts(repoPath);
+            if (splitParts.Count == 0)
+            {
+                return false;
+            }
+
+            Trace.WriteLine($"[GameRepositoryClient] Rebuilding split file from local repo: {relativeUrl} ({splitParts.Count} parts)");
+            await MergePartsAsync(splitParts, localPath);
+            return true;
+        }
+
+        private async Task<bool> TryMergeSplitFileFromRemoteAsync(string relativeUrl, string localPath)
+        {
+            int totalParts = await TryGetRemoteSplitPartCountAsync(relativeUrl);
+            if (totalParts <= 0 || _httpClient == null)
+            {
+                return false;
+            }
+
+            string? tempDir = null;
+            var partPaths = new List<string>(totalParts);
+
+            try
+            {
+                tempDir = Path.Combine(Path.GetTempPath(), "NewAxisRepoParts", GetSafeFilename($"{_baseUrl}/{relativeUrl}"));
+                Directory.CreateDirectory(tempDir);
+
+                for (int i = 1; i <= totalParts; i++)
+                {
+                    string partRelativeUrl = $"{relativeUrl}.{i:D3}-{totalParts:D3}";
+                    string partUrl = $"{_baseUrl}/{partRelativeUrl}";
+                    string partPath = Path.Combine(tempDir, Path.GetFileName(partRelativeUrl));
+
+                    Trace.WriteLine($"[GameRepositoryClient] Downloading split part {i}/{totalParts}: {partRelativeUrl}");
+                    using (var response = await _httpClient.GetAsync(partUrl, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        await using var httpStream = await response.Content.ReadAsStreamAsync();
+                        await using var fileStream = new FileStream(partPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                        await httpStream.CopyToAsync(fileStream);
+                    }
+
+                    partPaths.Add(partPath);
+                }
+
+                Trace.WriteLine($"[GameRepositoryClient] Rebuilding split file from remote repo: {relativeUrl} ({totalParts} parts)");
+                await MergePartsAsync(partPaths, localPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[GameRepositoryClient] Failed to rebuild split remote file {relativeUrl}: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(tempDir))
+                {
+                    try
+                    {
+                        Directory.Delete(tempDir, recursive: true);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        private async Task<int> TryGetRemoteSplitPartCountAsync(string relativeUrl)
+        {
+            for (int total = 2; total <= MaxSplitPartsProbe; total++)
+            {
+                string probeUrl = $"{_baseUrl}/{relativeUrl}.001-{total:D3}";
+                if (await RemoteFileExistsAsync(probeUrl))
+                {
+                    return total;
+                }
+            }
+
+            return 0;
+        }
+
+        private async Task<bool> RemoteFileExistsAsync(string url)
+        {
+            if (_httpClient == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                using var headRequest = new HttpRequestMessage(HttpMethod.Head, url);
+                using var headResponse = await _httpClient.SendAsync(headRequest, HttpCompletionOption.ResponseHeadersRead);
+                if (headResponse.IsSuccessStatusCode)
+                {
+                    return true;
+                }
+
+                if (headResponse.StatusCode != HttpStatusCode.MethodNotAllowed &&
+                    headResponse.StatusCode != HttpStatusCode.NotImplemented)
+                {
+                    return false;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                using var getRequest = new HttpRequestMessage(HttpMethod.Get, url);
+                getRequest.Headers.Range = new RangeHeaderValue(0, 0);
+                using var getResponse = await _httpClient.SendAsync(getRequest, HttpCompletionOption.ResponseHeadersRead);
+                return getResponse.IsSuccessStatusCode || getResponse.StatusCode == HttpStatusCode.PartialContent;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static IReadOnlyList<string> FindLocalSplitParts(string repoPath)
+        {
+            string? directory = Path.GetDirectoryName(repoPath);
+            if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory))
+            {
+                return Array.Empty<string>();
+            }
+
+            string fileName = Path.GetFileName(repoPath);
+            string prefix = fileName + ".";
+            var parts = new List<(string Path, int PartNumber, int TotalParts)>();
+
+            foreach (var path in Directory.EnumerateFiles(directory, $"{fileName}.*-*"))
+            {
+                string name = Path.GetFileName(path);
+                if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string suffix = name.Substring(prefix.Length);
+                var split = suffix.Split('-', 2, StringSplitOptions.None);
+                if (split.Length != 2 ||
+                    !int.TryParse(split[0], out int partNumber) ||
+                    !int.TryParse(split[1], out int totalParts) ||
+                    partNumber <= 0 ||
+                    totalParts <= 1)
+                {
+                    continue;
+                }
+
+                parts.Add((path, partNumber, totalParts));
+            }
+
+            if (parts.Count == 0)
+            {
+                return Array.Empty<string>();
+            }
+
+            parts = parts.OrderBy(x => x.PartNumber).ToList();
+            int expectedTotalParts = parts[0].TotalParts;
+
+            if (parts.Any(x => x.TotalParts != expectedTotalParts))
+            {
+                return Array.Empty<string>();
+            }
+
+            if (parts.Count != expectedTotalParts)
+            {
+                return Array.Empty<string>();
+            }
+
+            for (int i = 0; i < parts.Count; i++)
+            {
+                if (parts[i].PartNumber != i + 1)
+                {
+                    return Array.Empty<string>();
+                }
+            }
+
+            return parts.Select(x => x.Path).ToArray();
+        }
+
+        private static async Task MergePartsAsync(IEnumerable<string> partPaths, string destinationPath)
+        {
+            var directory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            string tempPath = destinationPath + ".tmp";
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+
+            await using (var destinationStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                foreach (var partPath in partPaths)
+                {
+                    await using var sourceStream = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    await sourceStream.CopyToAsync(destinationStream);
+                }
+            }
+
+            File.Move(tempPath, destinationPath, true);
         }
 
         public bool IsLocalMode => _isForceLocalMode;

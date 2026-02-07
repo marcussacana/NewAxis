@@ -15,7 +15,7 @@ public static class ModTypeExtensions
     {
         return value switch
         {
-            ModType.ThreeDPlus => "3D+",
+            ModType.ThreeDPlus => "Rendepth",
             ModType.ThreeDUltra => "3D Ultra",
             ModType.Native => "Native",
             _ => value.ToString()
@@ -26,6 +26,7 @@ public static class ModTypeExtensions
     {
         return description switch
         {
+            "Rendepth" => ModType.ThreeDPlus,
             "3D+" => ModType.ThreeDPlus,
             "3D Ultra" => ModType.ThreeDUltra,
             "Native" => ModType.Native,

@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StreamGeometry x:Key="PlayIcon">M8,5.14V19.14L19,12.14L8,5.14Z</StreamGeometry>
+    <StreamGeometry x:Key="PauseIcon">M14,19H18V5H14M6,19H10V5H6V19Z</StreamGeometry>
+    <StreamGeometry x:Key="StopIcon">M6,6H18V18H6V6Z</StreamGeometry>
+    <StreamGeometry x:Key="OpenIcon">M19,20H4C2.89,20 2,19.1 2,18V6C2,4.89 2.89,4 4,4H10L12,6H19A2,2 0 0,1 21,8H21L4,8V18L6.14,10.7C6.32,10.08 6.9,9.68 7.53,9.68H22.54A0.46,0.46 0 0,1 23,10.14C23,10.18 23,10.22 22.95,10.26L19,20Z</StreamGeometry>
+    <StreamGeometry x:Key="SkipForwardIcon">M4 18l8.5-6L4 6v12zM13 6v12h2V6h-2z</StreamGeometry>
+    <StreamGeometry x:Key="SkipBackwardIcon">M15 18l-8.5-6 8.5-6v12zM6 6v12H4V6h2z</StreamGeometry>
+    <StreamGeometry x:Key="JumpForwardIcon">M5,18L13.5,12L5,6V18M13.5,18L22,12L13.5,6V18Z</StreamGeometry>
+    <StreamGeometry x:Key="JumpBackwardIcon">M18,18V6L9.5,12L18,18M9.5,18V6L1,12L9.5,18Z</StreamGeometry>
+    <StreamGeometry x:Key="SpeedUpIcon">M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z</StreamGeometry>
+    <StreamGeometry x:Key="SpeedDownIcon">M19,13H5V11H19V13Z</StreamGeometry>
+    <StreamGeometry x:Key="SubtitlesIcon">M20,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4M4,12H8V14H4V12M14,18H4V16H14V18M20,18H16V16H20V18M20,14H10V12H20V14Z</StreamGeometry>
+    <StreamGeometry x:Key="AudioIcon">M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z</StreamGeometry>
+    <StreamGeometry x:Key="FullscreenIcon">M7,14H5V19H10V17H7V14M5,10H7V7H10V5H5V10M17,17H14V19H19V14H17V17M14,5V7H17V10H19V5H14Z</StreamGeometry>
+    <StreamGeometry x:Key="RepeatIcon">M17,17H7V14L3,18L7,22V19H18V13H16V17M7,7H17V10L21,6L17,2V5H6V11H8V7Z</StreamGeometry>
+    <StreamGeometry x:Key="VolumeIcon">M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.85 14,18.71V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16.02C15.5,15.29 16.5,13.77 16.5,12M3,9V15H7L12,20V4L7,9H3Z</StreamGeometry>
+</ResourceDictionary>

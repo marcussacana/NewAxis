@@ -75,6 +75,7 @@ public class MainViewModel : ViewModelBase
                 }
 
                 OnPropertyChanged(nameof(SelectedMod));
+                OnPropertyChanged(nameof(DisplayedCreator));
 
                 _ = LoadGameBannerAsync(_selectedGame);
 
@@ -342,7 +343,31 @@ public class MainViewModel : ViewModelBase
     public string? SelectedMod
     {
         get => _selectedMod;
-        set => SetField(ref _selectedMod, value);
+        set
+        {
+            if (SetField(ref _selectedMod, value))
+            {
+                OnPropertyChanged(nameof(DisplayedCreator));
+            }
+        }
+    }
+
+    public string DisplayedCreator
+    {
+        get
+        {
+            if (ModTypeExtensions.FromDescription(SelectedMod) == ModType.ThreeDPlus)
+            {
+                return "cybereality";
+            }
+
+            if (!string.IsNullOrWhiteSpace(SelectedGame?.Creator))
+            {
+                return SelectedGame.Creator;
+            }
+
+            return Localization["UnknownCreator"];
+        }
     }
 
     private double _depth = 50;
@@ -369,6 +394,8 @@ public class MainViewModel : ViewModelBase
     public ICommand ResetDefaultsCommand { get; }
     public ICommand ToggleAboutCommand { get; }
     public ICommand OpenUrlCommand { get; }
+    public ICommand Open3dViewCommand { get; }
+    public ICommand OpenVideoPlayerCommand { get; }
 
     private bool _isSettingsOpen;
     public bool IsSettingsOpen
@@ -486,6 +513,7 @@ public class MainViewModel : ViewModelBase
                 Localization.CurrentLanguage = value;
                 OnPropertyChanged(nameof(SelectedLanguage));
                 OnPropertyChanged(nameof(Localization));
+                OnPropertyChanged(nameof(DisplayedCreator));
                 Trace.WriteLine($"Language changed to {value}");
             }
         }
@@ -542,6 +570,16 @@ public class MainViewModel : ViewModelBase
                     Trace.WriteLine($"Error opening URL: {ex.Message}");
                 }
             }
+        });
+
+        Open3dViewCommand = new RelayCommand(_ =>
+        {
+            ChildToolProcessService.Launch(ChildToolMode.Viewer3D);
+        });
+
+        OpenVideoPlayerCommand = new RelayCommand(_ =>
+        {
+            ChildToolProcessService.Launch(ChildToolMode.VideoPlayer);
         });
 
         AcceptUpdateCommand = new RelayCommand(ExecuteAcceptUpdate);
@@ -783,6 +821,10 @@ public class MainViewModel : ViewModelBase
 
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
         }
+        catch (OperationCanceledException)
+        {
+            Trace.WriteLine("LoadGamesFromRepositoryAsync canceled.");
+        }
         catch (Exception ex)
         {
             Trace.WriteLine($"Error loading games from repository: {ex.Message}");
@@ -797,6 +839,10 @@ public class MainViewModel : ViewModelBase
 
             _ = RefreshGamesListAsync();
             if (SelectedGame == null) SelectedGame = Games.FirstOrDefault();
+        }
+        finally
+        {
+            IsLoadingGames = false;
         }
     }
 
@@ -958,48 +1004,55 @@ public class MainViewModel : ViewModelBase
         _refreshCts = new System.Threading.CancellationTokenSource();
         var token = _refreshCts.Token;
 
-        var currentSelection = SelectedGame;
-
-        var filteredGames = await Task.Run(() =>
+        try
         {
-            return _allGames
-                .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) &&
-                            (ShowUninstalledGames || g.IsInstalled) &&
-                            (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
-                .OrderBy(g => g.Name)
-                .ToList();
-        }, token);
+            var currentSelection = SelectedGame;
 
-        if (token.IsCancellationRequested) return;
+            var filteredGames = await Task.Run(() =>
+            {
+                return _allGames
+                    .Where(g => (g.SupportedModTypes.Count > 0 || !string.IsNullOrEmpty(g.InstallPath)) &&
+                                (ShowUninstalledGames || g.IsInstalled) &&
+                                (string.IsNullOrEmpty(SearchQuery) || g.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)))
+                    .OrderBy(g => g.Name)
+                    .ToList();
+            }, token);
 
-        Games.Clear();
-
-        // Determine batch size based on whether icons are already loaded
-        // If most games have icons cached, we can use a larger batch size
-        int iconsLoaded = filteredGames.Count(g => g.IconImage != null);
-        bool mostIconsCached = filteredGames.Count > 0 && ((double)iconsLoaded / filteredGames.Count) > 0.5;
-        int batchSize = mostIconsCached ? 10 : 2;
-
-        for (int i = 0; i < filteredGames.Count; i++)
-        {
             if (token.IsCancellationRequested) return;
 
-            Games.Add(filteredGames[i]);
-            _ = LoadGameIconAsync(filteredGames[i]);
+            Games.Clear();
 
-            if ((i + 1) % batchSize == 0)
+            // Determine batch size based on whether icons are already loaded
+            // If most games have icons cached, we can use a larger batch size
+            int iconsLoaded = filteredGames.Count(g => g.IconImage != null);
+            bool mostIconsCached = filteredGames.Count > 0 && ((double)iconsLoaded / filteredGames.Count) > 0.5;
+            int batchSize = mostIconsCached ? 10 : 2;
+
+            for (int i = 0; i < filteredGames.Count; i++)
             {
-                await Task.Delay(100, token); // Yield to UI thread
+                if (token.IsCancellationRequested) return;
+
+                Games.Add(filteredGames[i]);
+                _ = LoadGameIconAsync(filteredGames[i]);
+
+                if ((i + 1) % batchSize == 0)
+                {
+                    await Task.Delay(100, token); // Yield to UI thread
+                }
+            }
+
+            if (currentSelection != null && Games.Contains(currentSelection))
+            {
+                SelectedGame = currentSelection;
+            }
+            else if (Games.Count > 0)
+            {
+                SelectedGame = Games.FirstOrDefault();
             }
         }
-
-        if (currentSelection != null && Games.Contains(currentSelection))
+        catch (OperationCanceledException)
         {
-            SelectedGame = currentSelection;
-        }
-        else if (Games.Count > 0)
-        {
-            SelectedGame = Games.FirstOrDefault();
+            // Expected when a newer refresh supersedes the current one.
         }
     }
 

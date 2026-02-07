@@ -79,7 +79,15 @@ namespace NewAxis.Services
                 }
             }
 
+            if (File.Exists(fullExecutablePath))
+            {
+                // Install next to the resolved executable to avoid wrong installs when metadata path is stale/missing.
+                targetDirectory = Path.GetDirectoryName(fullExecutablePath) ?? targetDirectory;
+            }
+
             Trace.WriteLine($"[ModInstaller] Installing {modType.GetDescription()} mod for {game.Name}...");
+            Trace.WriteLine($"[ModInstaller] Target directory: {targetDirectory}");
+            Trace.WriteLine($"[ModInstaller] Resolved executable: {fullExecutablePath}");
 
             try
             {
@@ -122,7 +130,7 @@ namespace NewAxis.Services
                     {
                         Reshade7zPath = reshadeLocalPath,
                         TargetDirectory = targetDirectory,
-                        ExecutablePath = executablePath,
+                        ExecutablePath = fullExecutablePath,
                         GameEntry = gameEntry,
                         ShaderPath = shaderLocalPath
                     });
@@ -144,7 +152,7 @@ namespace NewAxis.Services
                         File.Copy(gameBridge, bridgeDest, true);
                         installedFiles.Add(Path.GetRelativePath(gameInstallPath, bridgeDest));
 
-                        Trace.WriteLine($"[ModInstaller] ✓ Installed 3DGameBridge.addon to {bridgeDest}");
+                        Trace.WriteLine($"[ModInstaller] Installed 3DGameBridge.addon to {bridgeDest}");
                     }
                     catch (Exception ex)
                     {
@@ -671,4 +679,3 @@ namespace NewAxis.Services
         }
     }
 }
-

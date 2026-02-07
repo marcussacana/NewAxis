@@ -63,13 +63,10 @@ namespace NewAxis.Services
                 var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, context.GameEntry.TargetDllFileName ?? "dxgi.dll", true);
                 installedFiles.AddRange(extractedFiles);
 
-                if (!string.IsNullOrEmpty(context.GameEntry.ReshadePresetPlus))
-                {
-                    var presetPath = Path.Combine(context.TargetDirectory, "ReShadePreset.ini");
-                    var presetContent = GenerateReshadePresetIni(context.GameEntry.ReshadePresetPlus);
-                    await File.WriteAllTextAsync(presetPath, presetContent);
-                    installedFiles.Add(presetPath);
-                }
+                var presetPath = Path.Combine(context.TargetDirectory, "ReShadePreset.ini");
+                var presetContent = GenerateReshadePresetIni(context.GameEntry.ReshadePresetPlus);
+                await File.WriteAllTextAsync(presetPath, presetContent, Encoding.UTF8);
+                installedFiles.Add(presetPath);
 
                 if (!string.IsNullOrEmpty(context.ShaderPath) && File.Exists(context.ShaderPath))
                 {
@@ -314,15 +311,26 @@ namespace NewAxis.Services
         /// <summary>
         /// Generates the ReShadePreset.ini content from preset data
         /// </summary>
-        private static string GenerateReshadePresetIni(string presetData)
+        private static string GenerateReshadePresetIni(string? presetData)
         {
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine("PreprocessorDefinitions = ");
-            sb.AppendLine("Techniques = rendepth@Rendepth.fx");
-            sb.AppendLine("TechniqueSorting = rendepth@Rendepth.fx");
+            sb.AppendLine("Techniques=Rendepth@Rendepth.fx");
             sb.AppendLine();
             sb.AppendLine("[Rendepth.fx]");
-            sb.AppendLine(presetData);
+
+            if (string.IsNullOrWhiteSpace(presetData))
+            {
+                sb.AppendLine("showDepth=0");
+                sb.AppendLine("stereoDepth=50.000000");
+                sb.AppendLine("stereoMode=2");
+                sb.AppendLine("stereoOffset=50.000000");
+                sb.AppendLine("stereoStrength=50.000000");
+                sb.AppendLine("swapLeftRight=0");
+            }
+            else
+            {
+                sb.AppendLine(presetData.Trim());
+            }
 
             return sb.ToString();
         }
