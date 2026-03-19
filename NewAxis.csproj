@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
@@ -12,9 +12,14 @@
     <Company>NewAxis Project</Company>
     <Copyright>Copyright (c) NewAxis Project</Copyright>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <PublishAot Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'DebugNativeAOT'">true</PublishAot>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'DebugNativeAOT'">
+    <Optimize>false</Optimize>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -38,7 +43,9 @@
     <PackageReference Include="SharpGLTF.Core" Version="1.0.0-beta9" />
   </ItemGroup>
 
-
+  <ItemGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'DebugNativeAOT'">
+    <Compile Include="..\LauncherNativeDebugUtil\*.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="Languages\*.json">

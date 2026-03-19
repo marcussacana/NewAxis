@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia;
 using NewAxis.Controls;
 using NewAxis.Services;
 using NewAxis.ViewModels;
@@ -19,6 +20,8 @@ public partial class VideoPlayerWindow : Window
     private bool _dependencyCheckStarted;
     private bool _dependencyCheckCompleted;
     private bool _playerControlAttached;
+    private Point _lastPointerPosition;
+    private const double PointerMoveThreshold = 5.0;
 
     public VideoPlayerWindow()
         : this(null)
@@ -108,6 +111,9 @@ public partial class VideoPlayerWindow : Window
         vm.OnRequestFullscreenMode -= Vm_OnRequestFullscreenMode;
         vm.OnRequestFullscreenMode += Vm_OnRequestFullscreenMode;
 
+        vm.PropertyChanged -= Vm_PropertyChanged;
+        vm.PropertyChanged += Vm_PropertyChanged;
+
         if (!_dependencyCheckCompleted)
         {
             return;
@@ -179,6 +185,38 @@ public partial class VideoPlayerWindow : Window
         }, DispatcherPriority.Background);
     }
 
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == WindowStateProperty)
+        {
+            UpdateCursorVisibility();
+        }
+    }
+
+    private void Vm_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(VideoPlayerViewModel.IsControlsVisible))
+        {
+            UpdateCursorVisibility();
+        }
+    }
+
+    private void UpdateCursorVisibility()
+    {
+        if (DataContext is VideoPlayerViewModel vm)
+        {
+            if (!vm.IsControlsVisible && WindowState == WindowState.FullScreen)
+            {
+                Cursor = new Cursor(StandardCursorType.None);
+            }
+            else
+            {
+                Cursor = null;
+            }
+        }
+    }
+
     private void Vm_OnRequestFullscreenMode(bool enterFullscreen)
     {
         if (enterFullscreen)
@@ -206,11 +244,15 @@ public partial class VideoPlayerWindow : Window
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None && DataContext is VideoPlayerViewModel vm)
+        if (DataContext is VideoPlayerViewModel vm)
         {
-            vm.TogglePlayPauseCommand.Execute(null);
             vm.ShowControls();
-            e.Handled = true;
+
+            if (e.Key == Key.Space && e.KeyModifiers == KeyModifiers.None)
+            {
+                vm.TogglePlayPauseCommand.Execute(null);
+                e.Handled = true;
+            }
         }
     }
 
@@ -223,6 +265,21 @@ public partial class VideoPlayerWindow : Window
     }
 
     private void ControlPanel_PointerMoved(object? sender, PointerEventArgs e)
+    {
+        var currentPos = e.GetPosition(this);
+        var distance = Math.Sqrt(Math.Pow(currentPos.X - _lastPointerPosition.X, 2) + Math.Pow(currentPos.Y - _lastPointerPosition.Y, 2));
+
+        if (distance > PointerMoveThreshold)
+        {
+            _lastPointerPosition = currentPos;
+            if (DataContext is VideoPlayerViewModel vm)
+            {
+                vm.ShowControls();
+            }
+        }
+    }
+
+    private void ControlPanel_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (DataContext is VideoPlayerViewModel vm)
         {

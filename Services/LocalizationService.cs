@@ -60,7 +60,13 @@ public class LocalizationService : INotifyPropertyChanged
         { "VideoStatus3DDisabled", "3D disabled" },
         { "PlayerDepsUnavailable", "Video player dependencies unavailable: {0}." },
         { "PlayerDepsRepoHint", "Download failed from '{0}'. Check internet/RepoOverride and try again." },
-        { "PlayerDepsUnknownFiles", "unknown files" }
+        { "PlayerDepsUnknownFiles", "unknown files" },
+        { "PreparingData", "Preparing" },
+        { "VideoStatusLoopEnabled", "Loop Enabled" },
+        { "VideoStatusLoopDisabled", "Loop Disabled" },
+        { "VideoStereoAuto", "Auto" },
+        { "VideoStereoFullSbs", "Full SBS" },
+        { "VideoStereoHalfSbs", "Half SBS" }
     };
 
     public ObservableCollection<string> AvailableLanguages { get; } = new ObservableCollection<string>();

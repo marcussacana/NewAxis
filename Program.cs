@@ -18,6 +18,7 @@ class Program
     public static string? StartupVideoPath { get; private set; }
     public static bool StartVideoPlayerMode { get; private set; }
     public static bool StartMeshViewerMode { get; private set; }
+    public static bool LogEnabled { get; private set; }
     public static string? StartupPipeName { get; private set; }
     private static int _startupReadySignaled;
 
@@ -25,6 +26,7 @@ class Program
     public static void Main(string[] args)
     {
         bool logEnabled = args?.Any(x => x.TrimStart('-', '/', '\\').Equals("log", StringComparison.InvariantCultureIgnoreCase)) ?? false;
+        LogEnabled = logEnabled;
 
         if (logEnabled)
         {
@@ -59,7 +61,7 @@ class Program
         StartupPipeName = GetArgValue(args, "--startup-pipe=");
         if (!string.IsNullOrWhiteSpace(StartupVideoPath))
         {
-            
+
             bool exists = File.Exists(StartupVideoPath);
             Trace.Write("Program", $"Startup video path: {StartupVideoPath} | exists={exists}");
         }
@@ -82,6 +84,11 @@ class Program
             NewAxis.Graphics.StandaloneMeshViewer.Run();
             return;
         }
+
+
+#if DEBUG
+        NewAxis.Services.Debug.Attach();
+#endif
 
         BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
@@ -201,3 +208,4 @@ class Program
         });
     }
 }
+

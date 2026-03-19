@@ -93,5 +93,10 @@
     "VideoStatus3DDisabled":  "3D вимкнено",
     "PlayerDepsUnavailable":  "Залежності відеоплеєра недоступні: {0}.",
     "PlayerDepsRepoHint":  "Не вдалося завантажити з '{0}'. Перевірте інтернет/RepoOverride і спробуйте ще раз.",
-    "PlayerDepsUnknownFiles":  "невідомі файли"
+    "PlayerDepsUnknownFiles":  "невідомі файли",
+    "VideoStatusLoopEnabled": "Цикл увімкнено",
+    "VideoStatusLoopDisabled": "Цикл вимкнено",
+    "VideoStereoAuto": "Авто",
+    "VideoStereoFullSbs": "Full SBS",
+    "VideoStereoHalfSbs": "Half SBS"
 }

@@ -169,7 +169,7 @@
     </Style>
   </Window.Styles>
 
-  <Panel PointerMoved="ControlPanel_PointerMoved" Background="Transparent">
+  <Panel PointerMoved="ControlPanel_PointerMoved" PointerPressed="ControlPanel_PointerPressed" Background="Transparent">
 
     <controls:VideoPlayerControl x:Name="VideoPlayer" IsHitTestVisible="False" />
 

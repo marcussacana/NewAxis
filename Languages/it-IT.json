@@ -93,5 +93,10 @@
     "VideoStatus3DDisabled":  "3D disattivato",
     "PlayerDepsUnavailable":  "Dipendenze del lettore video non disponibili: {0}.",
     "PlayerDepsRepoHint":  "Download da '{0}' non riuscito. Controlla internet/RepoOverride e riprova.",
-    "PlayerDepsUnknownFiles":  "file sconosciuti"
+    "PlayerDepsUnknownFiles":  "file sconosciuti",
+    "VideoStatusLoopEnabled": "Loop attivato",
+    "VideoStatusLoopDisabled": "Loop disattivato",
+    "VideoStereoAuto": "Auto",
+    "VideoStereoFullSbs": "Full SBS",
+    "VideoStereoHalfSbs": "Half SBS"
 }

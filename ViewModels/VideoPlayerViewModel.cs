@@ -30,7 +30,7 @@ namespace NewAxis.ViewModels
         private string _currentTrackType = "";
         private readonly DispatcherTimer _autoHideTimer;
         private readonly DispatcherTimer _statusTimer;
-        private string _lastMainStatus = "Stopped";
+        private string _lastMainStatus = L("VideoStatusStopped");
         private readonly DispatcherTimer _syncTimer;
         private bool _is3DEnabled;
         private int _stereoToggleVersion;
@@ -756,7 +756,7 @@ namespace NewAxis.ViewModels
 
             if (enable3D)
             {
-                string mode = _playerControl?.GetDetectedSbsLayoutLabel() ?? "Auto";
+                string mode = _playerControl?.GetDetectedSbsLayoutLabel() ?? L("VideoStereoAuto");
                 SetStatus(string.Format(L("VideoStatus3DEnabled"), mode), true);
             }
             else
@@ -766,17 +766,13 @@ namespace NewAxis.ViewModels
 
             ShowControls();
         }
+
         private void ToggleLoop()
         {
             IsLoopEnabled = !IsLoopEnabled;
             _playerControl?.SetLoop(IsLoopEnabled);
 
-
-            string status = IsLoopEnabled ? "Loop Enabled" : "Loop Disabled";
-            // Check if localization exists, otherwise use fallback
-            try { status = IsLoopEnabled ? L("VideoStatusLoopEnabled") : L("VideoStatusLoopDisabled"); } catch { }
-
-
+            string status = IsLoopEnabled ? L("VideoStatusLoopEnabled") : L("VideoStatusLoopDisabled");
             SetStatus(status, true);
             ShowControls();
         }

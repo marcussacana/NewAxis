@@ -93,5 +93,10 @@
     "VideoStatus3DDisabled":  "3D を無効化",
     "PlayerDepsUnavailable":  "動画プレーヤーの依存関係を利用できません: {0}。",
     "PlayerDepsRepoHint":  "'{0}' からのダウンロードに失敗しました。インターネット/RepoOverride を確認して再試行してください。",
-    "PlayerDepsUnknownFiles":  "不明なファイル"
+    "PlayerDepsUnknownFiles":  "不明なファイル",
+    "VideoStatusLoopEnabled": "ループ有効",
+    "VideoStatusLoopDisabled": "ループ無効",
+    "VideoStereoAuto": "自動",
+    "VideoStereoFullSbs": "Full SBS",
+    "VideoStereoHalfSbs": "Half SBS"
 }

@@ -125,6 +125,12 @@ namespace NewAxis.Services
         public static extern int mpv_render_context_render(IntPtr ctx, IntPtr params_ptr);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int mpv_render_context_render_video_only(IntPtr ctx, IntPtr params_ptr);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int mpv_render_context_render_subtitles(IntPtr ctx, IntPtr params_ptr);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern void mpv_render_context_free(IntPtr ctx);
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -249,7 +255,7 @@ namespace NewAxis.Services
             }
             Trace.Write("MpvContext", "mpv_initialize ok.");
 
-            LibMpv.mpv_request_log_messages(_handle, "warn");
+            LibMpv.mpv_request_log_messages(_handle, Program.LogEnabled ? "warn" : "no");
         }
 
         public event Action? FileLoaded;
@@ -269,7 +275,10 @@ namespace NewAxis.Services
                 {
                     break;
                 }
-                Trace.Write("MpvContext", $"event id={mpvEvent.event_id} error={mpvEvent.error}");
+                if (Program.LogEnabled)
+                {
+                    Trace.Write("MpvContext", $"event id={mpvEvent.event_id} error={mpvEvent.error}");
+                }
 
                 if (mpvEvent.event_id == LibMpv.mpv_event_id.FILE_LOADED)
                 {
@@ -361,3 +370,4 @@ namespace NewAxis.Services
         }
     }
 }
+
