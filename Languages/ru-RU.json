@@ -58,6 +58,8 @@
     "AutoRotate":  "Автовращение",
     "ResetView":  "Сбросить вид",
     "DitheredTransparency":  "Дизерная прозрачность",
+    "ShowStage": "Показать сцену",
+    "BackgroundColor": "Цвет фона",
     "Open3DModel":  "Открыть 3D модель",
     "Models3D":  "3D модели",
     "ObjFiles":  "OBJ файлы",

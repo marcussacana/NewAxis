@@ -88,7 +88,6 @@ namespace NewAxis.Controls
 
         public bool SwapEyes { get; set; } = false;
 
-        // Parallax intensity (0.0 = no head tracking effect, 1.0 = full effect)
         private float _parallaxIntensity = 0.48f;
         public float ParallaxIntensity
         {
@@ -104,6 +103,30 @@ namespace NewAxis.Controls
             {
                 if (_useDitheredBlend == value) return;
                 _useDitheredBlend = value;
+                RequestNextFrameRendering();
+            }
+        }
+
+        private bool _showStage = true;
+        public bool ShowStage
+        {
+            get => _showStage;
+            set
+            {
+                if (_showStage == value) return;
+                _showStage = value;
+                RequestNextFrameRendering();
+            }
+        }
+
+        private Avalonia.Media.Color _backgroundColor = Avalonia.Media.Color.FromArgb(255, 0, 0, 0); // Default opaque black
+        public Avalonia.Media.Color BackgroundColor
+        {
+            get => _backgroundColor;
+            set
+            {
+                if (_backgroundColor == value) return;
+                _backgroundColor = value;
                 RequestNextFrameRendering();
             }
         }
@@ -725,7 +748,7 @@ namespace NewAxis.Controls
             bool shouldDisplayStereo = runtimeReadyForStereo && _windowEligibleFor3D;
             ApplyLensHint(shouldDisplayStereo);
 
-            _gl.ClearColor(0, 0, 0, 1);
+            _gl.ClearColor(_backgroundColor.R / 255.0f, _backgroundColor.G / 255.0f, _backgroundColor.B / 255.0f, _backgroundColor.A / 255.0f);
             _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 
             if (_vao != 0 && _program != 0 && _currentMeshData != null)
@@ -871,7 +894,7 @@ namespace NewAxis.Controls
 
                     _gl.UniformMatrix4(_uProjection, 1, false, (float*)&proj);
                     _gl.UniformMatrix4(_uView, 1, false, (float*)&view);
-                    DrawStage(stageModel);
+                    if (_showStage) DrawStage(stageModel);
                     _gl.UniformMatrix4(_uModel, 1, false, (float*)&model);
                     DrawMeshParts();
                 }
@@ -912,7 +935,7 @@ namespace NewAxis.Controls
 
                     _gl.UniformMatrix4(_uProjection, 1, false, (float*)&proj);
                     _gl.UniformMatrix4(_uView, 1, false, (float*)&view);
-                    DrawStage(stageModel);
+                    if (_showStage) DrawStage(stageModel);
                     _gl.UniformMatrix4(_uModel, 1, false, (float*)&model);
                     DrawMeshParts();
                 }

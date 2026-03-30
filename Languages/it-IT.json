@@ -58,6 +58,8 @@
     "AutoRotate":  "Rotazione automatica",
     "ResetView":  "Reimposta vista",
     "DitheredTransparency":  "Trasparenza dithered",
+    "ShowStage": "Mostra Palcoscenico",
+    "BackgroundColor": "Colore di Sfondo",
     "Open3DModel":  "Apri Modello 3D",
     "Models3D":  "Modelli 3D",
     "ObjFiles":  "File OBJ",

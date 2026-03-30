@@ -36,6 +36,7 @@ public class LocalizationService : INotifyPropertyChanged
         { "ViewerControls", "Controls" }, { "LoadModel", "Load Model" }, { "Scale", "Scale" },
         { "Parallax", "Parallax" }, { "AutoRotate", "Auto Rotate" }, { "ResetView", "Reset View" },
         { "DitheredTransparency", "Dithered Transparency" },
+        { "ShowStage", "Show Stage" }, { "BackgroundColor", "Background Color" },
         { "Open3DModel", "Open 3D Model" }, { "Models3D", "3D Models" },
         { "ObjFiles", "OBJ Files" }, { "GlbFiles", "GLB Files" },
         { "VideoPlayerWindowTitle", "3D Video Player" }, { "SelectVideoFile", "Select Video File" },

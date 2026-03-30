@@ -46,6 +46,8 @@ namespace NewAxis
             this.FindControl<Button>("LoadButton")?.SetCurrentValue(Button.ContentProperty, loc["LoadModel"]);
             this.FindControl<CheckBox>("RotateCheckBox")?.SetCurrentValue(CheckBox.ContentProperty, loc["AutoRotate"]);
             this.FindControl<CheckBox>("DitheredBlendCheckBox")?.SetCurrentValue(CheckBox.ContentProperty, loc["DitheredTransparency"]);
+            this.FindControl<CheckBox>("ShowStageCheckBox")?.SetCurrentValue(CheckBox.ContentProperty, loc["ShowStage"]);
+            this.FindControl<TextBlock>("BackgroundColorLabelText")?.SetCurrentValue(TextBlock.TextProperty, loc["BackgroundColor"]);
             this.FindControl<Button>("ResetButton")?.SetCurrentValue(Button.ContentProperty, loc["ResetView"]);
         }
 
@@ -60,7 +62,10 @@ namespace NewAxis
 
             var rotateCheckBox = this.FindControl<CheckBox>("RotateCheckBox");
             var ditheredBlendCheckBox = this.FindControl<CheckBox>("DitheredBlendCheckBox");
+            var showStageCheckBox = this.FindControl<CheckBox>("ShowStageCheckBox");
+            var backgroundColorPicker = this.FindControl<ColorPicker>("BackgroundColorPicker");
             var resetButton = this.FindControl<Button>("ResetButton");
+            var closeButton = this.FindControl<Button>("CloseButton");
 
             var mainGrid = this.FindControl<Grid>("MainGrid");
             var uiControls = this.FindControl<StackPanel>("UIControls");
@@ -86,6 +91,38 @@ namespace NewAxis
                         viewer.UseDitheredBlend = ditheredBlendCheckBox.IsChecked ?? false;
                     }
                 };
+            }
+
+            if (showStageCheckBox != null && viewer != null && backgroundColorPicker != null)
+            {
+                viewer.ShowStage = showStageCheckBox.IsChecked ?? true;
+                viewer.BackgroundColor = backgroundColorPicker.Color;
+                
+                showStageCheckBox.PropertyChanged += (s, e) =>
+                {
+                    if (e.Property == CheckBox.IsCheckedProperty)
+                    {
+                        bool isChecked = showStageCheckBox.IsChecked ?? true;
+                        viewer.ShowStage = isChecked;
+                        backgroundColorPicker.IsEnabled = !isChecked; // Enable picker when stage is disabled
+                    }
+                };
+            }
+
+            if (backgroundColorPicker != null && viewer != null)
+            {
+                backgroundColorPicker.PropertyChanged += (s, e) =>
+                {
+                    if (e.Property == ColorPicker.ColorProperty)
+                    {
+                        viewer.BackgroundColor = backgroundColorPicker.Color;
+                    }
+                };
+            }
+
+            if (closeButton != null)
+            {
+                closeButton.Click += (s, e) => this.Close();
             }
 
             if (resetButton != null && viewer != null)

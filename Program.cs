@@ -13,7 +13,7 @@ namespace NewAxis;
 
 class Program
 {
-    public static double CurrentVersion = 13;
+    public static double CurrentVersion = 14;
     public static string? CustomRepoPath { get; private set; }
     public static string? StartupVideoPath { get; private set; }
     public static bool StartVideoPlayerMode { get; private set; }

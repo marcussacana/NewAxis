@@ -58,6 +58,8 @@
     "AutoRotate":  "自動回転",
     "ResetView":  "ビューをリセット",
     "DitheredTransparency":  "ディザ透明",
+    "ShowStage": "ステージを表示",
+    "BackgroundColor": "背景色",
     "Open3DModel":  "3Dモデルを開く",
     "Models3D":  "3Dモデル",
     "ObjFiles":  "OBJファイル",

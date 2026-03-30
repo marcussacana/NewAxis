@@ -20,7 +20,10 @@
              </StackPanel.Transitions>
              
             <TextBlock Name="ViewerTitleText" Text="3D Viewer" Foreground="White" FontWeight="Bold"/>
-            <TextBlock Name="ViewerControlsText" Text="Controls" Foreground="Gray" FontSize="10"/>
+            <Grid>
+                <TextBlock Name="ViewerControlsText" Text="Controls" Foreground="Gray" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Left"/>
+                <Button Name="CloseButton" Content="X" Background="Transparent" Foreground="White" FontWeight="Bold" Padding="5,0" HorizontalAlignment="Right"/>
+            </Grid>
             
             <Button Content="Load Model" Name="LoadButton" Click="LoadButton_Click" HorizontalAlignment="Stretch"/>
 
@@ -31,6 +34,13 @@
             
             <CheckBox Name="RotateCheckBox" Content="Auto Rotate" IsChecked="True" Foreground="White" />
             <CheckBox Name="DitheredBlendCheckBox" Content="Dithered Transparency" IsChecked="False" Foreground="White" />
+            <CheckBox Name="ShowStageCheckBox" Content="Show Stage" IsChecked="True" Foreground="White" />
+            
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Name="BackgroundColorLabelText" Text="Background Color" Foreground="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ColorPicker Name="BackgroundColorPicker" Color="Black" Margin="0" IsEnabled="False" Width="80"/>
+            </StackPanel>
+
             <Button Content="Reset View" Name="ResetButton" HorizontalAlignment="Stretch"/>
             
             <!-- Depth and Popout Sliders -->
