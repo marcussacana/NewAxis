@@ -89,8 +89,33 @@ public class LocalizationService : INotifyPropertyChanged
             _translations["en-US"] = _embeddedFallback;
         }
 
-        // Default to System Language if supported, otherwise en-US
-        DetectSystemLanguage();
+        // Default to configured language or System Language if supported, otherwise en-US
+        if (!TryLoadConfigLanguage())
+        {
+            DetectSystemLanguage();
+        }
+    }
+
+    private bool TryLoadConfigLanguage()
+    {
+        try
+        {
+            var parser = new IniFileParser();
+            string configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.ini");
+            if (File.Exists(configPath))
+            {
+                parser.Load(configPath);
+                string? storedLang = parser.GetValue("Settings", "Language");
+                if (!string.IsNullOrEmpty(storedLang) && AvailableLanguages.Contains(storedLang))
+                {
+                    _currentLanguage = storedLang;
+                    return true;
+                }
+            }
+        }
+        catch { }
+        
+        return false;
     }
 
     private void DetectSystemLanguage()

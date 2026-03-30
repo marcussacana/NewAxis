@@ -28,11 +28,33 @@ namespace NewAxis.Services
         }
 
         private const string DefaultRepoBase = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
+
+        // Expected SHA256 hash for the current remote libmpv-2.dll
+        private const string ExpectedLibMpvHash = "C5A42CA3767F98E10672BFD31D3FF74D6F0179D35D2A65828A1294F77DB0B73C";
+
         private static readonly string AppDir = AppContext.BaseDirectory;
         private static bool _checked;
         private static DependencyCheckResult _lastResult =
             new DependencyCheckResult(true, "OK", Array.Empty<string>(), string.Empty);
         private static readonly object Sync = new();
+
+        private static string CalculateHash(string filePath)
+        {
+            if (!File.Exists(filePath)) return string.Empty;
+            
+            try
+            {
+                using var stream = File.OpenRead(filePath);
+                using var sha256 = System.Security.Cryptography.SHA256.Create();
+                var hash = sha256.ComputeHash(stream);
+                return Convert.ToHexString(hash);
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to calculate SHA256 for {filePath} : {ex.Message}");
+                return string.Empty;
+            }
+        }
 
         public static DependencyCheckResult EnsureNativeDependencies()
         {
@@ -57,7 +79,7 @@ namespace NewAxis.Services
 
                 try
                 {
-                    if (!EnsureRuntimeFile("libmpv-2.dll", "Global/Runtime/VideoPlayer/libmpv-2.dll"))
+                    if (!EnsureRuntimeFile("libmpv-2.dll", "Global/Runtime/VideoPlayer/libmpv-2.dll", ExpectedLibMpvHash))
                     {
                         missingRequired.Add("libmpv-2.dll");
                     }
@@ -87,27 +109,72 @@ namespace NewAxis.Services
             }
         }
 
-        private static bool EnsureRuntimeFile(string fileName, string relativeRepoPath)
+        private static bool EnsureRuntimeFile(string fileName, string relativeRepoPath, string? expectedHash = null)
         {
             string targetPath = Path.Combine(AppDir, fileName);
-            if (File.Exists(targetPath))
+            bool exists = File.Exists(targetPath);
+
+            if (exists && !string.IsNullOrWhiteSpace(expectedHash))
             {
+                string localHash = CalculateHash(targetPath);
+                if (string.Equals(localHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log($"File {fileName} exists and hash matches ({localHash}).");
+                    return true;
+                }
+                Log($"File {fileName} hash mismatch. Expected: {expectedHash}, Got: {localHash}. Redownloading...");
+            }
+            else if (exists)
+            {
+                // No hash check requested, file exists
                 return true;
             }
 
             string repoSource = ResolveRepositorySource();
+            string tempPath = targetPath + ".tmp";
+
             try
             {
                 var repoClient = new GameRepositoryClient(repoSource);
-                Task.Run(() => repoClient.DownloadFileAsync(relativeRepoPath, targetPath)).GetAwaiter().GetResult();
-                Log($"Downloaded {fileName} from repo: {repoSource}");
-                return File.Exists(targetPath);
+                Task.Run(() => repoClient.DownloadFileAsync(relativeRepoPath, tempPath)).GetAwaiter().GetResult();
+
+                if (File.Exists(tempPath))
+                {
+                    // Move/overwrite existing file
+                    File.Move(tempPath, targetPath, overwrite: true);
+
+                    if (!string.IsNullOrWhiteSpace(expectedHash))
+                    {
+                        string newHash = CalculateHash(targetPath);
+                        Log($"Downloaded {fileName} from repo: {repoSource} with hash: {newHash}");
+                    }
+                    else
+                    {
+                        Log($"Downloaded {fileName} from repo: {repoSource}");
+                    }
+                    return true;
+                }
             }
             catch (Exception ex)
             {
                 Log($"Failed to download {fileName}: {ex.Message}");
-                return File.Exists(targetPath);
             }
+            finally
+            {
+                if (File.Exists(tempPath))
+                {
+                    try { File.Delete(tempPath); } catch { }
+                }
+            }
+
+            // If download failed and we still have the old file, just use the old file
+            if (File.Exists(targetPath))
+            {
+                Log($"Using existing {fileName} despite failed update.");
+                return true;
+            }
+
+            return false;
         }
 
         private static string ResolveRepositorySource()
