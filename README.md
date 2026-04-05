@@ -21,7 +21,7 @@ NewAxis **should** works with any **LeiaSR-compatible monitor**, including:
 - **Automatic Updates** - Stay up-to-date with the latest features
 - **AMD Support** - NewAxis automatically apply fixes for AMD GPUs
 - **3D Model Viewer** - NewAxis has a basic 3D Model Viewer that works on LeiaSR displays
-- **3D Video Player** - NewAxis has a 3D video player with Full Side-by-Side Support, ![Test it](https://www.mediafire.com/?oq8zn325j825zq2)
+- **3D Video Player** - NewAxis has a 3D video player with Full Side-by-Side Support, [Test it](https://www.mediafire.com/?oq8zn325j825zq2)
 
 ## Getting Started
 
