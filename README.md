@@ -6,7 +6,7 @@
 
 NewAxis **should** works with any **LeiaSR-compatible monitor**, including:
 
-- **Samsung Odyssey 3D** ✅ (Tested)
+- **Samsung Odyssey 3D** 
 - **Acer SpatialLabs**
 - **Sony Spatial Reality Display**
 - **Lenovo ThinkVision**
@@ -20,6 +20,8 @@ NewAxis **should** works with any **LeiaSR-compatible monitor**, including:
 - **Customizable Settings** - Adjust depth, popout, and hotkeys to your preference
 - **Automatic Updates** - Stay up-to-date with the latest features
 - **AMD Support** - NewAxis automatically apply fixes for AMD GPUs
+- **3D Model Viewer** - NewAxis has a basic 3D Model Viewer that works on LeiaSR displays
+- **3D Video Player** - NewAxis has a 3D video player with Full Side-by-Side Support, ![Test it](https://www.mediafire.com/?oq8zn325j825zq2)
 
 ## Getting Started
 
@@ -48,6 +50,8 @@ Click the gear icon in the sidebar to access:
 - **Install mod temporarily** - Automatically removes mods after closing the game
 - **Disable DLSS** - Disable DLSS for better 3D compatibility
 - **Hotkeys** - Customize in-game shortcuts for depth and popout adjustments
+- **Offline** - Allows you download the entire NewAxis repo for offline usage
+- **Repo URL** - Allows you change the NewAxis repo url.
 
 
 ## Contributing Community Mods
@@ -74,7 +78,6 @@ Want to add support for a new game? We welcome community contributions!
 
 Notes:
 - NewAxis will withhold patch updates for a minimum of three months after a new game is released on Acer, Samsung, or Lenovo platforms.
-- If a currently released game crashes due to a missing update, it may be eligible for an early update before the three-month period ends.
 - Games with native support (such as Tomb Raider on Acer or Stellar Blade on Samsung) will likely not be supported by NewAxis.
 
 ## Requirements
