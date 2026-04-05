@@ -82,6 +82,9 @@ public partial class VideoPlayerControl : OpenGlControlBase
     private bool? _lastLoggedFullSbs;
     private float? _lastLoggedAspectZoomY;
     private bool _mpvFrameDirty = true;
+    private bool _subtitleTextureDirty = true;
+    private long _lastSubtitleTextureRenderTimestamp;
+    private ulong _lastSubtitleRedrawId;
     private DateTime _lastMpvUpdateUtc = DateTime.MinValue;
     private bool _dependencyCheckInProgress;
     private bool? _subtitleBandLayoutEnabled;
@@ -160,6 +163,7 @@ public partial class VideoPlayerControl : OpenGlControlBase
         Log("mpv.LoadFile dispatched.");
         DetectSbsLayout();
         UpdateMpvAspectForStereoMode();
+        MarkSubtitleTextureDirty();
         _isPlaying = true;
         MarkFrameDirtyAndRequest();
     }
@@ -302,6 +306,7 @@ public partial class VideoPlayerControl : OpenGlControlBase
             if (trackType == MediaTrackType.Subtitle)
             {
                 UpdateMpvSourceSize();
+                MarkSubtitleTextureDirty();
                 MarkFrameDirtyAndRequest();
             }
             return true;
@@ -324,7 +329,16 @@ public partial class VideoPlayerControl : OpenGlControlBase
         _subtitleBandDebugDumpDone = false;
         _lastLoggedSelectedSubtitleSignature = null;
         _mpvFrameDirty = true;
+        _subtitleTextureDirty = true;
+        _lastSubtitleTextureRenderTimestamp = 0;
         _pendingLoadFile = true;
+    }
+
+    private void MarkSubtitleTextureDirty()
+    {
+        _subtitleTextureDirty = true;
+        _lastSubtitleTextureRenderTimestamp = 0;
+        _lastSubtitleRedrawId = 0;
     }
 
     private void MarkFrameDirtyAndRequest()

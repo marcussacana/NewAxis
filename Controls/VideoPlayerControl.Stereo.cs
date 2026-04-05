@@ -162,6 +162,7 @@ public partial class VideoPlayerControl
         }
 
         bool isFullSbs = _sbs3DEnabled && IsCurrentSourceLikelyFullSbs();
+        bool aspectOverrideChanged = _mpvFullSbsAspectOverrideEnabled != isFullSbs;
         if (_mpvKeepAspectDisabled != false)
         {
             _mpvKeepAspectDisabled = false;
@@ -182,6 +183,10 @@ public partial class VideoPlayerControl
         }
 
         _mpvFullSbsAspectOverrideEnabled = isFullSbs;
+        if (aspectOverrideChanged)
+        {
+            MarkSubtitleTextureDirty();
+        }
         try
         {
             _mpv.SetProperty("video-aspect-override", isFullSbs ? "1.7777778" : "no");

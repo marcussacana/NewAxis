@@ -187,6 +187,7 @@ public partial class VideoPlayerControl
     private PreparedFrame PrepareStereoOutputTexture(RenderDimensions dimensions, bool isFullSbs, float aspectZoomY, bool shouldRenderFrame)
     {
         bool subtitleTextureResized = false;
+        bool hasSubtitleRedrawId = TryGetSubtitleRedrawId(out ulong subtitleRedrawId);
         if (dimensions.UseSubtitleOverlay)
         {
             subtitleTextureResized = _subtitleTextureW != dimensions.Width || _subtitleTextureH != dimensions.RenderHeight;
@@ -196,11 +197,18 @@ public partial class VideoPlayerControl
         if (shouldRenderFrame || subtitleTextureResized)
         {
             RenderMpvToTexture(dimensions.Width, dimensions.RenderHeight, _videoTexture, MpvRenderPass.VideoOnly);
-            if (dimensions.UseSubtitleOverlay)
-            {
-                RenderMpvToTexture(dimensions.Width, dimensions.RenderHeight, _subtitleTexture, MpvRenderPass.SubtitlesOnly);
-            }
             _mpvFrameDirty = false;
+        }
+
+        if (dimensions.UseSubtitleOverlay && ShouldRenderSubtitleTexture(subtitleTextureResized, hasSubtitleRedrawId, subtitleRedrawId))
+        {
+            RenderMpvToTexture(dimensions.Width, dimensions.RenderHeight, _subtitleTexture, MpvRenderPass.SubtitlesOnly);
+            _subtitleTextureDirty = false;
+            _lastSubtitleTextureRenderTimestamp = Stopwatch.GetTimestamp();
+            if (hasSubtitleRedrawId)
+            {
+                _lastSubtitleRedrawId = subtitleRedrawId;
+            }
         }
 
         return new PreparedFrame(
@@ -210,6 +218,59 @@ public partial class VideoPlayerControl
             dimensions.UseSubtitleOverlay
                 ? (_mpvImageSubtitleTrackSelected ? SubtitleModeStereoSbs : SubtitleModeStereoMono)
                 : SubtitleModeNone);
+    }
+
+    private bool ShouldRenderSubtitleTexture(bool subtitleTextureResized, bool hasSubtitleRedrawId, ulong subtitleRedrawId)
+    {
+        if (_subtitleTextureDirty || subtitleTextureResized)
+        {
+            return true;
+        }
+
+        if (hasSubtitleRedrawId)
+        {
+            return _lastSubtitleRedrawId != subtitleRedrawId;
+        }
+
+        if (_lastSubtitleTextureRenderTimestamp == 0)
+        {
+            return true;
+        }
+
+        long elapsedTicks = Stopwatch.GetTimestamp() - _lastSubtitleTextureRenderTimestamp;
+        long refreshTicks = Stopwatch.Frequency / 10;
+        return elapsedTicks >= refreshTicks;
+    }
+
+    private bool TryGetSubtitleRedrawId(out ulong redrawId)
+    {
+        redrawId = 0;
+        if (_mpv == null || _renderContext == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            redrawId = _mpv.GetSubtitlesRedrawId(_renderContext);
+            return redrawId != 0;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return false;
+        }
+        catch (DllNotFoundException)
+        {
+            return false;
+        }
+        catch (BadImageFormatException)
+        {
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private void PresentFrame(int fb, RenderDimensions dimensions, PreparedFrame preparedFrame, bool isFullSbs, float aspectZoomY)
@@ -451,26 +512,18 @@ public partial class VideoPlayerControl
             return;
         }
 
-        uint sourceFbo = _videoFbo;
-        if (preparedFrame.HasSubtitleTexture == 1)
-        {
-            EnsureCompositeTextureSize(width, height);
-            DrawTextureToFramebuffer(
-                (int)_compositeFbo,
-                width,
-                height,
-                new DrawFrameOptions(
-                    0,
-                    preparedFrame.VideoTexture,
-                    preparedFrame.SubtitleTexture,
-                    preparedFrame.HasSubtitleTexture,
-                    1,
-                    preparedFrame.SubtitleMode));
-            sourceFbo = _compositeFbo;
-        }
-
         EnsureWeaveTextureSize(width, height);
-        BlitTextureToTextureFlipped(sourceFbo, _weaveFbo, width, height);
+        DrawTextureToFramebuffer(
+            (int)_weaveFbo,
+            width,
+            height,
+            new DrawFrameOptions(
+                1,
+                preparedFrame.VideoTexture,
+                preparedFrame.SubtitleTexture,
+                preparedFrame.HasSubtitleTexture,
+                1,
+                preparedFrame.SubtitleMode));
 
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)fb);
         _gl.Viewport(0, 0, (uint)width, (uint)height);
@@ -506,19 +559,6 @@ public partial class VideoPlayerControl
                     1,
                     preparedFrame.SubtitleMode));
         }
-    }
-
-    private void BlitTextureToTextureFlipped(uint sourceFbo, uint targetFbo, int width, int height)
-    {
-        if (_gl == null)
-        {
-            return;
-        }
-
-        _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, sourceFbo);
-        _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, targetFbo);
-        _gl.BlitFramebuffer(0, 0, width, height, 0, height, width, 0, ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Linear);
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0u);
     }
 
     private unsafe void DrawTextureToFramebuffer(int fb, int width, int height, DrawFrameOptions options)

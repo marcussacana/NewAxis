@@ -195,6 +195,7 @@ public partial class VideoPlayerControl
         Log("TryDispatchPendingLoad: mpv.LoadFile dispatched after delayed init.");
         DetectSbsLayout();
         UpdateMpvAspectForStereoMode();
+        MarkSubtitleTextureDirty();
         _isPlaying = true;
         MarkFrameDirtyAndRequest();
     }
@@ -223,6 +224,7 @@ public partial class VideoPlayerControl
             UpdateMpvSourceSize();
             DetectSbsLayout();
             UpdateMpvAspectForStereoMode();
+            MarkSubtitleTextureDirty();
             LogSelectedSubtitleState();
             FileLoaded?.Invoke();
             Log($"OnMpvFileLoaded UI: source={_sourceVideoWidth}x{_sourceVideoHeight} layout={_detectedSbsLayout}");
@@ -295,6 +297,7 @@ public partial class VideoPlayerControl
         }
         _mpvTextSubtitleTrackSelected = HasSelectedTextSubtitleTrack();
         _mpvImageSubtitleTrackSelected = HasSelectedImageSubtitleTrack();
+        MarkSubtitleTextureDirty();
         if (_lastLoggedMpvTextSubtitleTrackSelected != _mpvTextSubtitleTrackSelected)
         {
             _lastLoggedMpvTextSubtitleTrackSelected = _mpvTextSubtitleTrackSelected;

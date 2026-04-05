@@ -133,6 +133,9 @@ namespace NewAxis.Services
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern void mpv_render_context_free(IntPtr ctx);
 
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern ulong mpv_render_context_get_subtitles_redraw_id(IntPtr ctx);
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void mpv_render_update_fn(IntPtr cb_ctx);
 
@@ -306,6 +309,16 @@ namespace NewAxis.Services
                 return;
             }
             LibMpv.ExecuteCommand(_handle, args);
+        }
+
+        public ulong GetSubtitlesRedrawId(IntPtr renderContext)
+        {
+            if (renderContext == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            return LibMpv.mpv_render_context_get_subtitles_redraw_id(renderContext);
         }
 
         public void SetProperty(string name, string value)
