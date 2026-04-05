@@ -30,7 +30,7 @@ namespace NewAxis.Services
         private const string DefaultRepoBase = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
 
         // Expected SHA256 hash for the current remote libmpv-2.dll
-        private const string ExpectedLibMpvHash = "C5A42CA3767F98E10672BFD31D3FF74D6F0179D35D2A65828A1294F77DB0B73C";
+        private const string ExpectedLibMpvHash = "CB7168328AEF78A22284FE54FAD35F990C01CFEE9859388755C744210C59DF1C";
 
         private static readonly string AppDir = AppContext.BaseDirectory;
         private static bool _checked;

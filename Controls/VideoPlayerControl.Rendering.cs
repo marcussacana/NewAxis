@@ -15,6 +15,7 @@ public partial class VideoPlayerControl
 {
     private const int SubtitleModeNone = 0;
     private const int SubtitleModeStereoMono = 1;
+    private const int SubtitleModeStereoSbs = 2;
 
     private enum MpvRenderPass
     {
@@ -89,6 +90,7 @@ public partial class VideoPlayerControl
 
         PreparedFrame preparedFrame = PrepareOutputTexture(dimensions, isFullSbs, aspectZoomY);
         PresentFrame(fb, dimensions, preparedFrame, isFullSbs, aspectZoomY);
+        DumpStereoSubtitleDebugFrames(dimensions.Width, dimensions.RenderHeight, dimensions.RenderHeight);
     }
 
     protected override void OnOpenGlDeinit(GlInterface gli)
@@ -205,7 +207,9 @@ public partial class VideoPlayerControl
             _videoTexture,
             dimensions.UseSubtitleOverlay ? _subtitleTexture : 0u,
             dimensions.UseSubtitleOverlay ? 1 : 0,
-            dimensions.UseSubtitleOverlay ? SubtitleModeStereoMono : SubtitleModeNone);
+            dimensions.UseSubtitleOverlay
+                ? (_mpvImageSubtitleTrackSelected ? SubtitleModeStereoSbs : SubtitleModeStereoMono)
+                : SubtitleModeNone);
     }
 
     private void PresentFrame(int fb, RenderDimensions dimensions, PreparedFrame preparedFrame, bool isFullSbs, float aspectZoomY)
@@ -634,13 +638,16 @@ public partial class VideoPlayerControl
 
     private void DumpStereoSubtitleDebugFrames(int width, int height, int extendedHeight)
     {
-        if (!_sbs3DEnabled || (!_mpvTextSubtitleTrackSelected && !_mpvImageSubtitleTrackSelected) || _subtitleBandDebugDumpDone)
+        bool hasSubtitleTexture = _mpvTextSubtitleTrackSelected || _mpvImageSubtitleTrackSelected;
+        bool shouldDump = _subtitleBandDebugDumpRequested || (_sbs3DEnabled && hasSubtitleTexture && !_subtitleBandDebugDumpDone);
+        if (!shouldDump)
         {
             return;
         }
 
         DumpSubtitleBandDebugTextures(width, height, extendedHeight);
         _subtitleBandDebugDumpDone = true;
+        _subtitleBandDebugDumpRequested = false;
     }
 
     private void DumpSubtitleBandDebugTextures(int width, int height, int extendedHeight)
@@ -735,4 +742,3 @@ public partial class VideoPlayerControl
         return Program.LogEnabled && (_renderCallCount <= 8 || _renderCallCount % 120 == 0);
     }
 }
-

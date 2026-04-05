@@ -95,6 +95,7 @@ namespace NewAxis.ViewModels
         public string StereoButtonLabel => Is3DEnabled ? L("VideoStereoOn") : L("VideoStereoOff");
         public string AudioButtonLabel => L("VideoAudio");
         public string SubsButtonLabel => L("VideoSubs");
+        public string DumpButtonLabel => L("VideoDump");
         public string CurrentTrackTypeLabel => CurrentTrackType == "Audio" ? L("VideoTrackTypeAudio") : L("VideoTrackTypeSubtitle");
 
         public double PositionSeconds
@@ -220,6 +221,7 @@ namespace NewAxis.ViewModels
         public ICommand SpeedDownCommand { get; }
         public ICommand ToggleAudioMenuCommand { get; }
         public ICommand ToggleSubtitleMenuCommand { get; }
+        public ICommand DumpSubtitleDebugCommand { get; }
         public ICommand ToggleFullscreenCommand { get; }
         public ICommand CloseTrackMenuCommand { get; }
         public ICommand SelectTrackCommand { get; }
@@ -245,6 +247,7 @@ namespace NewAxis.ViewModels
             SpeedDownCommand = new RelayCommand(_ => AdjustSpeed(-0.1f));
             ToggleAudioMenuCommand = new RelayCommand(_ => OpenTrackMenu("Audio"));
             ToggleSubtitleMenuCommand = new RelayCommand(_ => OpenTrackMenu("Subtitle"));
+            DumpSubtitleDebugCommand = new RelayCommand(_ => DumpSubtitleDebug());
             ToggleFullscreenCommand = new RelayCommand(_ => ToggleFullscreen());
             CloseTrackMenuCommand = new RelayCommand(_ =>
             {
@@ -361,6 +364,7 @@ namespace NewAxis.ViewModels
                 OnPropertyChanged(nameof(StereoButtonLabel));
                 OnPropertyChanged(nameof(AudioButtonLabel));
                 OnPropertyChanged(nameof(SubsButtonLabel));
+                OnPropertyChanged(nameof(DumpButtonLabel));
                 OnPropertyChanged(nameof(CurrentTrackTypeLabel));
 
                 if (_isDependencyCheckInProgress)
@@ -774,6 +778,19 @@ namespace NewAxis.ViewModels
 
             string status = IsLoopEnabled ? L("VideoStatusLoopEnabled") : L("VideoStatusLoopDisabled");
             SetStatus(status, true);
+            ShowControls();
+        }
+
+        private void DumpSubtitleDebug()
+        {
+            if (_playerControl == null)
+            {
+                SetStatus(L("VideoStatusPlayerNotInitialized"), true);
+                return;
+            }
+
+            _playerControl.RequestSubtitleDebugDump();
+            SetStatus(L("VideoStatusSubtitleDumpRequested"), true);
             ShowControls();
         }
     }

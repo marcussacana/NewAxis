@@ -89,6 +89,7 @@ public partial class VideoPlayerControl : OpenGlControlBase
     private int _glMaxTextureSize;
     private int _lastLoggedSubtitleBandHeight;
     private bool _subtitleBandDebugDumpDone;
+    private bool _subtitleBandDebugDumpRequested;
     private string? _lastLoggedSelectedSubtitleSignature;
 
     public bool IsPlaying => _isPlaying;
@@ -238,6 +239,13 @@ public partial class VideoPlayerControl : OpenGlControlBase
         }
     }
 
+    public void RequestSubtitleDebugDump()
+    {
+        _subtitleBandDebugDumpDone = false;
+        _subtitleBandDebugDumpRequested = true;
+        MarkFrameDirtyAndRequest();
+    }
+
     public void SetVolume(double volume)
     {
         if (_mpv != null)
@@ -325,4 +333,3 @@ public partial class VideoPlayerControl : OpenGlControlBase
         RequestNextFrameRendering();
     }
 }
-

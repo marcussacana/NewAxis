@@ -8,7 +8,7 @@ uniform sampler2D uSubtitleTexture;
 uniform int uHasSubtitleTexture;
 uniform int uFlipY;
 uniform int uSbs3DEnabled;
-uniform int uSubtitleMode; // 0 = none, 1 = stereo mono overlay
+uniform int uSubtitleMode; // 0 = none, 1 = mono overlay duplicated per eye, 2 = stereo SBS subtitle
 
 const float kSubPopoutPx = 25.0;
 
@@ -31,18 +31,13 @@ void main()
         return;
     }
 
-    float subX = uv.x;
-    if (uSbs3DEnabled == 1)
+    vec2 subUv = uv;
+    if (uSbs3DEnabled == 1 && uSubtitleMode == 1)
     {
-        subX = eyeX;
-        float popout = kSubPopoutPx / float(textureSize(uSubtitleTexture, 0).x);
-        popout = clamp(popout, -0.01, 0.01);
-        subX += (eye < 0.5 ? popout : -popout);
-        subX = clamp(subX, 0.001, 0.999);
-        subX = subX * 0.5 + 0.25;
+        subUv.x = eyeX;
     }
 
-    vec4 subSample = texture(uSubtitleTexture, vec2(subX, uv.y));
+    vec4 subSample = texture(uSubtitleTexture, subUv);
     float alpha = clamp(subSample.a, 0.0, 1.0);
     vec3 color = mix(baseColor.rgb, subSample.rgb, alpha);
     FragColor = vec4(color, 1.0);

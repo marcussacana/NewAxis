@@ -290,6 +290,11 @@
                  <TextBlock Text="{Binding SubsButtonLabel}" FontSize="11" VerticalAlignment="Center"/>
                </StackPanel>
              </Button>
+             <!--
+             <Button Command="{Binding DumpSubtitleDebugCommand}" Classes="ControlButton" VerticalAlignment="Center">
+               <TextBlock Text="{Binding DumpButtonLabel}" FontSize="11" VerticalAlignment="Center"/>
+             </Button>
+             -->
              <Button Command="{Binding ToggleFullscreenCommand}" Classes="ControlButton">
                <PathIcon Data="{StaticResource FullscreenIcon}" Width="14" Height="14" Foreground="White"/>
              </Button>
