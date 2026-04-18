@@ -937,16 +937,9 @@ public class MainViewModel : ViewModelBase
             return null;
         }
 
-        string communityPath = Path.Combine(_repoClient.REPO_BASE, "community.json");
-        if (!File.Exists(communityPath))
-        {
-            return null;
-        }
-
         try
         {
-            var json = await File.ReadAllTextAsync(communityPath);
-            var manifest = JsonSerializer.Deserialize(json, AppJsonContext.Default.CommunityModManifest);
+            var manifest = await _repoClient.GetCommunityModManifestAsync();
             if (manifest == null || string.IsNullOrWhiteSpace(manifest.ModPath))
             {
                 return null;

@@ -89,13 +89,47 @@ namespace NewAxis.Services
             throw new FileNotFoundException("Game index not found locally or online.", indexPath);
         }
 
+        public async Task<CommunityModManifest?> GetCommunityModManifestAsync()
+        {
+            if (_isForceLocalMode)
+            {
+                return await GetLocalCommunityModManifestAsync();
+            }
+
+            try
+            {
+                var manifestUrl = $"{_baseUrl}/community.json";
+                Trace.WriteLine($"Downloading community manifest: {manifestUrl}");
+                var json = await _httpClient!.GetStringAsync(manifestUrl);
+                Trace.WriteLine("Parsing online community manifest data");
+                return JsonSerializer.Deserialize(json, AppJsonContext.Default.CommunityModManifest);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"Failed to get online community manifest ({ex.Message}). Falling back to local.");
+                return await GetLocalCommunityModManifestAsync();
+            }
+        }
+
+        private async Task<CommunityModManifest?> GetLocalCommunityModManifestAsync()
+        {
+            var manifestPath = Path.Combine(REPO_BASE, "community.json");
+            if (File.Exists(manifestPath))
+            {
+                Trace.WriteLine($"Reading local community manifest: {manifestPath}");
+                var json = await File.ReadAllTextAsync(manifestPath);
+                return JsonSerializer.Deserialize(json, AppJsonContext.Default.CommunityModManifest);
+            }
+
+            return null;
+        }
+
         public async Task<DateTime?> GetOnlineRepoDateAsync()
         {
             if (_isForceLocalMode) return null;
 
             try
             {
-                // We fetch the index solely to check the generated date
                 var index = await GetGameIndexAsync();
 
                 if (DateTime.TryParse(index.GeneratedAt, out var date))
