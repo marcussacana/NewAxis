@@ -25,7 +25,8 @@ namespace NewAxis.Services
             string config7zPath,
             string targetDirectory,
             string? settingsOverridesJson = null,
-            GameIndexEntry? gameEntry = null)
+            GameIndexEntry? gameEntry = null,
+            Action? onInstalled = null)
         {
             if (!File.Exists(config7zPath))
             {
@@ -69,12 +70,12 @@ namespace NewAxis.Services
                 if (jsonInstructionsPath != null)
                 {
                     Trace.WriteLine($"[Config] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
-                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson, gameEntry);
+                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, tempExtractDir, targetDirectory, settingsOverridesJson, gameEntry, onInstalled);
                 }
                 else
                 {
                     Trace.WriteLine("[Config] No JSON instructions found, copying all files...");
-                    installedFiles = await CopyAllFilesAsync(tempExtractDir, targetDirectory);
+                    installedFiles = await CopyAllFilesAsync(tempExtractDir, targetDirectory, onInstalled);
                 }
 
                 Trace.WriteLine($"[Config] Extraction complete! {installedFiles.Count} files installed.");
@@ -98,7 +99,8 @@ namespace NewAxis.Services
             string sourceDir,
             string targetDirectory,
             string? settingsOverridesJson,
-            GameIndexEntry? gameEntry)
+            GameIndexEntry? gameEntry,
+            Action? onInstalled = null)
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
@@ -192,6 +194,7 @@ namespace NewAxis.Services
                                 {
                                     await File.WriteAllTextAsync(targetPresetPath, contentToWrite);
                                     installedFiles.Add(targetPresetPath);
+                                    onInstalled?.Invoke();
                                 }
                             }
                         }
@@ -206,7 +209,7 @@ namespace NewAxis.Services
             }
 
             Trace.WriteLine("[Config] Invalid or empty instruction file, falling back to copy all.");
-            return await CopyAllFilesAsync(sourceDir, targetDirectory);
+            return await CopyAllFilesAsync(sourceDir, targetDirectory, onInstalled);
         }
 
         private static string ApplySettingsToContent(string content, Root root, List<GameSettingOverride> overrides)
@@ -436,7 +439,7 @@ namespace NewAxis.Services
             return null;
         }
 
-        private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string targetDirectory)
+        private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string targetDirectory, Action? onInstalled = null)
         {
             var installedFiles = new List<string>();
             Directory.CreateDirectory(targetDirectory);
@@ -460,8 +463,9 @@ namespace NewAxis.Services
                     }
                 }
 
-                File.Copy(file, targetPath, overwrite: true);
+                await Task.Run(() => File.Copy(file, targetPath, overwrite: true));
                 installedFiles.Add(targetPath);
+                onInstalled?.Invoke();
             }
 
             return installedFiles;

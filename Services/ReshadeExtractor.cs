@@ -1,15 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics; // Ensure we have Models namespace for GameIndexEntry
 using System.IO;
 using System.Linq;
 using System.Reflection.PortableExecutable;
+using System.Text;
 using System.Threading.Tasks;
+using NewAxis.Models;
 using SharpCompress.Archives;
 using SharpCompress.Common;
-
-using NewAxis.Models;
-using System.Text;
-using System.Diagnostics; // Ensure we have Models namespace for GameIndexEntry
 
 namespace NewAxis.Services
 {
@@ -29,10 +28,15 @@ namespace NewAxis.Services
     {
         private static readonly string[] ObsoleteFilePatterns = { "SpatialLabs", "Acer", "slt", "Depth3D" };
 
+        public static bool IsObsoleteReshadeFile(string fileName)
+        {
+            return ObsoleteFilePatterns.Any(p => fileName.Contains(p, StringComparison.OrdinalIgnoreCase));
+        }
+
         /// <summary>
         /// Extracts Reshade from a 7z archive to the game directory
         /// </summary>
-        public static async Task<List<string>> ExtractReshadeAsync(ReshadeExtractionContext context)
+        public static async Task<List<string>> ExtractReshadeAsync(ReshadeExtractionContext context, Action? onInstalled = null)
         {
             if (!File.Exists(context.Reshade7zPath))
             {
@@ -60,21 +64,27 @@ namespace NewAxis.Services
             {
                 await ExtractArchiveByArchitectureAsync(context.Reshade7zPath, fullExePath, tempExtractDir);
 
-                var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, context.GameEntry.TargetDllFileName ?? "dxgi.dll", true);
+                var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, context.GameEntry.TargetDllFileName ?? "dxgi.dll", true, onInstalled);
                 installedFiles.AddRange(extractedFiles);
 
                 var presetPath = Path.Combine(context.TargetDirectory, "ReShadePreset.ini");
                 var presetContent = GenerateReshadePresetIni(context.GameEntry.ReshadePresetPlus);
                 await File.WriteAllTextAsync(presetPath, presetContent, Encoding.UTF8);
                 installedFiles.Add(presetPath);
+                onInstalled?.Invoke();
 
                 if (!string.IsNullOrEmpty(context.ShaderPath) && File.Exists(context.ShaderPath))
                 {
-                    var shaderFiles = await ExtractShaderAsync(context.ShaderPath, context.TargetDirectory);
+                    var shaderFiles = await ExtractShaderAsync(context.ShaderPath, context.TargetDirectory, onInstalled);
                     installedFiles.AddRange(shaderFiles);
                 }
 
-                UpdateReshadeIni(context.GameEntry, context.TargetDirectory, false);
+                var iniFiles = UpdateReshadeIni(context.GameEntry, context.TargetDirectory, false);
+                installedFiles.AddRange(iniFiles);
+                foreach (var _ in iniFiles)
+                {
+                    onInstalled?.Invoke();
+                }
 
                 return installedFiles;
             }
@@ -87,7 +97,7 @@ namespace NewAxis.Services
         /// <summary>
         /// Extracts Native Reshade from archive and renames DLL based on architecture
         /// </summary>
-        public static async Task<List<string>> ExtractNativeReshadeAsync(ReshadeExtractionContext context)
+        public static async Task<List<string>> ExtractNativeReshadeAsync(ReshadeExtractionContext context, Action? onInstalled = null)
         {
             if (!File.Exists(context.Reshade7zPath))
             {
@@ -112,10 +122,15 @@ namespace NewAxis.Services
                 // The caller typically sets it.
                 var targetDll = context.GameEntry.NativeReshadeDll ?? "dxgi.dll";
 
-                var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, targetDll);
+                var extractedFiles = InstallExtractedFiles(tempExtractDir, context.TargetDirectory, targetDll, false, onInstalled);
                 installedFiles.AddRange(extractedFiles);
 
-                UpdateReshadeIni(context.GameEntry, context.TargetDirectory, true);
+                var iniFiles = UpdateReshadeIni(context.GameEntry, context.TargetDirectory, true);
+                installedFiles.AddRange(iniFiles);
+                foreach (var _ in iniFiles)
+                {
+                    onInstalled?.Invoke();
+                }
 
                 return installedFiles;
             }
@@ -123,6 +138,36 @@ namespace NewAxis.Services
             {
                 CleanupTempDir(tempExtractDir);
             }
+        }
+
+        /// <summary>
+        /// Extracts only the ReShade runtime files without generating presets or ini files.
+        /// </summary>
+        public static async Task<List<string>> ExtractRuntimeOnlyAsync(ReshadeExtractionContext context, string targetDllName, Action? onInstalled = null)
+        {
+            if (!File.Exists(context.Reshade7zPath))
+            {
+                throw new FileNotFoundException($"ReShade runtime archive not found: {context.Reshade7zPath}");
+            }
+
+            var fullExePath = Path.IsPathRooted(context.ExecutablePath) ? context.ExecutablePath : Path.Combine(context.TargetDirectory, context.ExecutablePath);
+            var tempExtractDir = Path.Combine(Path.GetTempPath(), $"ReshadeRuntime_{Guid.NewGuid()}");
+            Directory.CreateDirectory(tempExtractDir);
+
+            try
+            {
+                await ExtractArchiveByArchitectureAsync(context.Reshade7zPath, fullExePath, tempExtractDir);
+                return InstallExtractedFiles(tempExtractDir, context.TargetDirectory, targetDllName, true, onInstalled);
+            }
+            finally
+            {
+                CleanupTempDir(tempExtractDir);
+            }
+        }
+
+        public static void ExtractArchiveByArchitecturePreview(string archivePath, string exePath, string outputDir)
+        {
+            ExtractArchiveByArchitectureAsync(archivePath, exePath, outputDir).GetAwaiter().GetResult();
         }
 
         private static async Task ExtractArchiveByArchitectureAsync(string archivePath, string exePath, string outputDir)
@@ -140,10 +185,6 @@ namespace NewAxis.Services
                 {
                     Trace.WriteLine($"[ReshadeManager] Archive opened: {archivePath}");
                     Trace.WriteLine($"[ReshadeManager] Entries count: {archive.Entries.Count()}");
-                    foreach (var entry in archive.Entries)
-                    {
-                        Trace.WriteLine($"[ReshadeManager]   - Entry: {entry.Key} (IsDir: {entry.IsDirectory}, Size: {entry.Size})");
-                    }
 
                     string normalizedPrefix = archFolderPrefix.Replace('\\', '/').ToLowerInvariant();
                     Trace.WriteLine($"[ReshadeManager] Searching for prefix: {normalizedPrefix}");
@@ -159,7 +200,7 @@ namespace NewAxis.Services
                     if (!foundInFolder)
                     {
                         Trace.WriteLine($"[ReshadeManager] {archFolder} folder not found in archive. Searching root for architecture-specific files...");
-                        
+
                         // If folders are missing, we look for ReShade64.dll/ReShade32.dll at the root
                         // and take all files that aren't other architecture's specific files
                         var otherDllMatch = is64Bit ? "32" : "64";
@@ -182,7 +223,7 @@ namespace NewAxis.Services
                     {
                         string entryKey = entry.Key!;
                         string relativePath;
-                        
+
                         if (foundInFolder)
                         {
                             // Remove prefix more safely
@@ -220,7 +261,7 @@ namespace NewAxis.Services
             });
         }
 
-        private static List<string> InstallExtractedFiles(string sourceDir, string targetDir, string targetDllName, bool excludeSpatialLabs = false)
+        private static List<string> InstallExtractedFiles(string sourceDir, string targetDir, string targetDllName, bool excludeSpatialLabs = false, Action? onInstalled = null)
         {
             var installedFiles = new List<string>();
 
@@ -266,6 +307,7 @@ namespace NewAxis.Services
 
                 File.Copy(srcDll, targetPath, true);
                 installedFiles.Add(targetPath);
+                onInstalled?.Invoke();
             }
 
             // Handle Other Files
@@ -273,10 +315,11 @@ namespace NewAxis.Services
             {
                 var fileName = Path.GetFileName(srcFile);
                 var targetPath = Path.Combine(targetDir, fileName);
-                
+
                 Trace.WriteLine($"[ReshadeManager] Installing file: {fileName}");
                 File.Copy(srcFile, targetPath, true);
                 installedFiles.Add(targetPath);
+                onInstalled?.Invoke();
             }
 
             return installedFiles;
@@ -338,7 +381,7 @@ namespace NewAxis.Services
         /// <summary>
         /// Extracts Shader from a 7z archive (file has no name inside)
         /// </summary>
-        private static async Task<List<string>> ExtractShaderAsync(string shader7zPath, string targetDirectory)
+        private static async Task<List<string>> ExtractShaderAsync(string shader7zPath, string targetDirectory, Action? onInstalled = null)
         {
             var tempExtractDir = Path.Combine(Path.GetTempPath(), $"Shader_{Guid.NewGuid()}");
             Directory.CreateDirectory(tempExtractDir);
@@ -370,6 +413,7 @@ namespace NewAxis.Services
                     var targetPath = Path.Combine(targetDirectory, "Shader.fxh");
                     File.Copy(tempFilePath, targetPath, overwrite: true);
                     extractedFiles.Add(targetPath);
+                    onInstalled?.Invoke();
                 }
                 return extractedFiles;
             }

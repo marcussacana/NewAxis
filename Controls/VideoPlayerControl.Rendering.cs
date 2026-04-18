@@ -169,6 +169,16 @@ public partial class VideoPlayerControl
         bool videoTextureResized = _videoTextureW != dimensions.Width || _videoTextureH != dimensions.RenderHeight;
         EnsureVideoTextureSize(dimensions.Width, dimensions.RenderHeight);
 
+        bool hasSubtitles = _mpvTextSubtitleTrackSelected || _mpvImageSubtitleTrackSelected;
+        bool subtitleTextureResized = false;
+        bool hasSubtitleRedrawId = TryGetSubtitleRedrawId(out ulong subtitleRedrawId);
+
+        if (hasSubtitles)
+        {
+            subtitleTextureResized = _subtitleTextureW != dimensions.Width || _subtitleTextureH != dimensions.RenderHeight;
+            EnsureSubtitleTextureSize(dimensions.Width, dimensions.RenderHeight);
+        }
+
         bool shouldRenderFrame = _mpvFrameDirty || videoTextureResized;
         if (_sbs3DEnabled)
         {
@@ -177,11 +187,26 @@ public partial class VideoPlayerControl
 
         if (shouldRenderFrame)
         {
-            RenderMpvToTexture(dimensions.Width, dimensions.RenderHeight, _videoTexture, MpvRenderPass.VideoWithSubtitles);
+            RenderMpvToTexture(dimensions.Width, dimensions.RenderHeight, _videoTexture, MpvRenderPass.VideoOnly);
             _mpvFrameDirty = false;
         }
 
-        return new PreparedFrame(_videoTexture, 0, 0, SubtitleModeNone);
+        if (hasSubtitles && ShouldRenderSubtitleTexture(subtitleTextureResized, hasSubtitleRedrawId, subtitleRedrawId))
+        {
+            RenderMpvToTexture(dimensions.Width, dimensions.RenderHeight, _subtitleTexture, MpvRenderPass.SubtitlesOnly);
+            _subtitleTextureDirty = false;
+            _lastSubtitleTextureRenderTimestamp = Stopwatch.GetTimestamp();
+            if (hasSubtitleRedrawId)
+            {
+                _lastSubtitleRedrawId = subtitleRedrawId;
+            }
+        }
+
+        return new PreparedFrame(
+            _videoTexture,
+            hasSubtitles ? _subtitleTexture : 0u,
+            hasSubtitles ? 1 : 0,
+            hasSubtitles ? SubtitleModeStereoMono : SubtitleModeNone);
     }
 
     private PreparedFrame PrepareStereoOutputTexture(RenderDimensions dimensions, bool isFullSbs, float aspectZoomY, bool shouldRenderFrame)
@@ -679,7 +704,10 @@ public partial class VideoPlayerControl
     private void DumpStereoSubtitleDebugFrames(int width, int height, int extendedHeight)
     {
         bool hasSubtitleTexture = _mpvTextSubtitleTrackSelected || _mpvImageSubtitleTrackSelected;
-        bool shouldDump = _subtitleBandDebugDumpRequested || (_sbs3DEnabled && hasSubtitleTexture && !_subtitleBandDebugDumpDone);
+        bool shouldDump = _subtitleBandDebugDumpRequested;
+#if DEBUG
+        shouldDump |= (_sbs3DEnabled && hasSubtitleTexture && !_subtitleBandDebugDumpDone);
+#endif
         if (!shouldDump)
         {
             return;

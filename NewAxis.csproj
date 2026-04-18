@@ -20,7 +20,12 @@
   <PropertyGroup Condition="'$(Configuration)' == 'DebugNativeAOT'">
     <Optimize>false</Optimize>
     <DebugType>embedded</DebugType>
+    <DefineConstants>DebugNativeAOT</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'DebugNativeAOT'">
+    <Compile Include="..\LauncherNativeDebugUtil\*.cs" />
+  </ItemGroup>
 
   <ItemGroup>
 
@@ -43,10 +48,6 @@
     <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="SharpGLTF.Core" Version="1.0.0-beta9" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(Configuration)' == 'Debug' Or '$(Configuration)' == 'DebugNativeAOT'">
-    <Compile Include="..\LauncherNativeDebugUtil\*.cs" />
   </ItemGroup>
 
   <ItemGroup>

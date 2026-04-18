@@ -1,13 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using NewAxis.Models;
-using System.Reflection;
+using SharpCompress.Archives;
+using SharpCompress.Archives.SevenZip;
+using SharpCompress.Common;
+using SharpCompress.Readers;
+using System.Threading;
 
 namespace NewAxis.Services
 {
@@ -29,6 +35,14 @@ namespace NewAxis.Services
         public Avalonia.Input.KeyModifiers Modifiers { get; set; }
     }
 
+    public class ModProgressInfo
+    {
+        public string Status { get; set; } = string.Empty;
+        public int Processed { get; set; }
+        public int? Total { get; set; }
+        public string? Detail { get; set; }
+    }
+
     public class ModInstaller
     {
         private const string MOD_FILES_LIST = "3dfiles.txt";
@@ -40,7 +54,8 @@ namespace NewAxis.Services
             Models.Game game,
             NewAxis.Models.ModType modType,
             GameRepositoryClient repoClient,
-            ModInstallationSettings settings)
+            ModInstallationSettings settings,
+            IProgress<ModProgressInfo>? progress = null)
         {
             var installedFiles = new List<string>();
 
@@ -89,6 +104,8 @@ namespace NewAxis.Services
             Trace.WriteLine($"[ModInstaller] Target directory: {targetDirectory}");
             Trace.WriteLine($"[ModInstaller] Resolved executable: {fullExecutablePath}");
 
+            var progressTracker = new ModInstallProgressTracker("Preparing", progress);
+
             try
             {
                 string? settingsJson = null;
@@ -109,7 +126,13 @@ namespace NewAxis.Services
                 {
                     Trace.WriteLine($"[ModInstaller] Found ConfigArchive (Mode: {modType}), installing...");
                     var configLocalPath = await DownloadFileAsync(repoClient, gameEntry.ConfigArchivePath);
-                    var configFiles = await ConfigExtractor.ExtractConfigAsync(configLocalPath, targetDirectory, settingsJson, gameEntry);
+                    progressTracker.AddToTotal(CountArchiveFiles(configLocalPath));
+                    var configFiles = await ConfigExtractor.ExtractConfigAsync(
+                        configLocalPath,
+                        targetDirectory,
+                        settingsJson,
+                        gameEntry,
+                        () => progressTracker.Advance());
                     installedFiles.AddRange(configFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                 }
                 if (modType == ModType.ThreeDPlus)
@@ -126,6 +149,14 @@ namespace NewAxis.Services
                         //shaderLocalPath = await DownloadFileAsync(repoClient, gameEntry.ShaderPath);
                     }
 
+                    progressTracker.AddToTotal(CountArchiveFiles(reshadeLocalPath, entry =>
+                        !ReshadeExtractor.IsObsoleteReshadeFile(Path.GetFileName(entry.Key ?? string.Empty))) + 2);
+
+                    if (!string.IsNullOrEmpty(shaderLocalPath))
+                    {
+                        progressTracker.AddToTotal(1);
+                    }
+
                     var reshadeFiles = await ReshadeExtractor.ExtractReshadeAsync(new ReshadeExtractionContext
                     {
                         Reshade7zPath = reshadeLocalPath,
@@ -133,7 +164,7 @@ namespace NewAxis.Services
                         ExecutablePath = fullExecutablePath,
                         GameEntry = gameEntry,
                         ShaderPath = shaderLocalPath
-                    });
+                    }, () => progressTracker.Advance());
 
                     installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
 
@@ -145,12 +176,14 @@ namespace NewAxis.Services
                         var bridgeUrl = "Global/3DGameBridge.addon";
                         Trace.WriteLine($"[ModInstaller] Downloading {bridgeUrl}...");
                         var gameBridge = await DownloadFileAsync(repoClient, bridgeUrl);
+                        progressTracker.AddToTotal(1);
 
                         // Install 3DGameBridge.addon to game directory
                         var bridgeDest = Path.Combine(targetDirectory, "3DGameBridge.addon");
 
                         File.Copy(gameBridge, bridgeDest, true);
                         installedFiles.Add(Path.GetRelativePath(gameInstallPath, bridgeDest));
+                        progressTracker.Advance();
 
                         Trace.WriteLine($"[ModInstaller] Installed 3DGameBridge.addon to {bridgeDest}");
                     }
@@ -168,25 +201,31 @@ namespace NewAxis.Services
                     }
 
                     var migotoLocalPath = await DownloadFileAsync(repoClient, gameEntry.MigotoPath);
+                    progressTracker.AddToTotal(CountArchiveFiles(migotoLocalPath));
                     var migotoFiles = await MigotoExtractor.ExtractMigotoAsync(
                         migotoLocalPath,
                         targetDirectory,
-                        fullExecutablePath);
+                        fullExecutablePath,
+                        () => progressTracker.Advance());
 
                     installedFiles.AddRange(migotoFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
 
                     if (!string.IsNullOrEmpty(gameEntry.ShaderMod))
                     {
                         var shaderLocalPath = await DownloadFileAsync(repoClient, gameEntry.ShaderMod);
+                        progressTracker.AddToTotal(CountArchiveFiles(shaderLocalPath));
                         var shaderFiles = await MigotoExtractor.ExtractMigotoAsync(
                             shaderLocalPath,
                             targetDirectory,
-                            fullExecutablePath);
+                            fullExecutablePath,
+                            () => progressTracker.Advance());
 
                         installedFiles.AddRange(shaderFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
                     }
 
                     await CreateTrueGameIniAsync(targetDirectory, settings);
+                    progressTracker.AddToTotal(1);
+                    progressTracker.Advance();
 
                     var d3dxPath = Path.Combine(targetDirectory, "d3dx.ini");
                     var d3dxRelPath = Path.GetRelativePath(gameInstallPath, d3dxPath);
@@ -214,6 +253,8 @@ namespace NewAxis.Services
                     {
                         await File.WriteAllTextAsync(d3dxPath, d3dxContent, new UTF8Encoding(false));
                         Trace.WriteLine($"[ModInstaller] Generated d3dx.ini pointing to {targetDirectory}");
+                        progressTracker.AddToTotal(1);
+                        progressTracker.Advance();
 
                         if (!installedFiles.Contains(d3dxRelPath))
                         {
@@ -235,22 +276,74 @@ namespace NewAxis.Services
                 }
                 else if (modType == ModType.Native)
                 {
-                    if (string.IsNullOrEmpty(gameEntry.NativeReshade) || string.IsNullOrEmpty(gameEntry.NativeReshadeDll))
+                    if (!string.IsNullOrEmpty(gameEntry.CommunityModPath))
                     {
-                        throw new Exception("NativeReshade or NativeReshadeDll not configured");
+                        Trace.WriteLine("[ModInstaller] Installing community mod package...");
+                        var communityArchivePath = await DownloadFileAsync(repoClient, gameEntry.CommunityModPath);
+                        progressTracker.AddToTotal(CountArchiveFiles(
+                            communityArchivePath,
+                            entry => !string.Equals(Path.GetFileName(entry.Key ?? string.Empty), gameEntry.CommunityReshadeEntryPoint, StringComparison.OrdinalIgnoreCase),
+                            logEntries: true,
+                            logContext: "community mod package"));
+                        var communityFiles = await ExtractCommunityModAsync(
+                            communityArchivePath,
+                            targetDirectory,
+                            gameEntry.CommunityReshadeEntryPoint,
+                            () => progressTracker.Advance());
+
+                        installedFiles.AddRange(communityFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
+
+                        if (!string.IsNullOrWhiteSpace(gameEntry.CommunityReshadeEntryPoint))
+                        {
+                            var reshadeLocalPath = await DownloadFileAsync(repoClient, "Global/Reshade/reshade.zip");
+                            progressTracker.AddToTotal(CountArchiveFiles(reshadeLocalPath, entry =>
+                                !ReshadeExtractor.IsObsoleteReshadeFile(Path.GetFileName(entry.Key ?? string.Empty))));
+                            var reshadeFiles = await ReshadeExtractor.ExtractRuntimeOnlyAsync(new ReshadeExtractionContext
+                            {
+                                Reshade7zPath = reshadeLocalPath,
+                                TargetDirectory = targetDirectory,
+                                ExecutablePath = fullExecutablePath,
+                                GameEntry = gameEntry
+                            }, gameEntry.CommunityReshadeEntryPoint!, () => progressTracker.Advance());
+
+                            installedFiles.AddRange(reshadeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
+
+                            try
+                            {
+                                Trace.WriteLine("[ModInstaller] Installing 3DGameBridge for community mod...");
+                                var bridgePath = await DownloadFileAsync(repoClient, "Global/3DGameBridge.addon");
+                                progressTracker.AddToTotal(1);
+                                var bridgeDest = Path.Combine(targetDirectory, "3DGameBridge.addon");
+                                File.Copy(bridgePath, bridgeDest, true);
+                                installedFiles.Add(Path.GetRelativePath(gameInstallPath, bridgeDest));
+                                progressTracker.Advance();
+                            }
+                            catch (Exception ex)
+                            {
+                                Trace.WriteLine($"[ModInstaller] Failed to install 3DGameBridge for community mod: {ex}");
+                            }
+                        }
                     }
-
-                    Trace.WriteLine($"[ModInstaller] Installing Native Reshade mode...");
-                    var nativeReshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.NativeReshade);
-                    var nativeFiles = await ReshadeExtractor.ExtractNativeReshadeAsync(new ReshadeExtractionContext
+                    else
                     {
-                        Reshade7zPath = nativeReshadeLocalPath,
-                        TargetDirectory = targetDirectory,
-                        ExecutablePath = fullExecutablePath,
-                        GameEntry = gameEntry
-                    });
+                        if (string.IsNullOrEmpty(gameEntry.NativeReshade) || string.IsNullOrEmpty(gameEntry.NativeReshadeDll))
+                        {
+                            throw new Exception("NativeReshade or NativeReshadeDll not configured");
+                        }
 
-                    installedFiles.AddRange(nativeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
+                        Trace.WriteLine($"[ModInstaller] Installing Native Reshade mode...");
+                        var nativeReshadeLocalPath = await DownloadFileAsync(repoClient, gameEntry.NativeReshade);
+                        progressTracker.AddToTotal(CountArchiveFiles(nativeReshadeLocalPath) + 2);
+                        var nativeFiles = await ReshadeExtractor.ExtractNativeReshadeAsync(new ReshadeExtractionContext
+                        {
+                            Reshade7zPath = nativeReshadeLocalPath,
+                            TargetDirectory = targetDirectory,
+                            ExecutablePath = fullExecutablePath,
+                            GameEntry = gameEntry
+                        }, () => progressTracker.Advance());
+
+                        installedFiles.AddRange(nativeFiles.Select(p => Path.GetRelativePath(gameInstallPath, p)));
+                    }
                 }
 
                 ProcessBlacklist(installedFiles, gameInstallPath, targetDirectory, settings.DisableBlacklistedDlls);
@@ -258,7 +351,10 @@ namespace NewAxis.Services
 
                 var filesListPath = Path.Combine(gameInstallPath, MOD_FILES_LIST);
                 await File.WriteAllLinesAsync(filesListPath, installedFiles);
+                progressTracker.AddToTotal(1);
+                progressTracker.Advance();
                 Trace.WriteLine($"[ModInstaller] Created {MOD_FILES_LIST} with {installedFiles.Count} entries");
+                progressTracker.Complete();
 
                 return installedFiles;
             }
@@ -267,6 +363,142 @@ namespace NewAxis.Services
                 Trace.WriteLine($"[ModInstaller] Error: {ex.Message}");
                 throw;
             }
+        }
+
+        private static async Task<List<string>> ExtractCommunityModAsync(string archivePath, string targetDirectory, string? excludedDllName, Action? onInstalled = null)
+        {
+            if (!File.Exists(archivePath))
+            {
+                throw new FileNotFoundException($"Community mod archive not found: {archivePath}");
+            }
+
+            return await ExtractCommunityModWithSharpCompressAsync(archivePath, targetDirectory, excludedDllName, onInstalled);
+        }
+
+        public static async Task<HashSet<string>> GetPendingInstallFilesAsync(
+            Models.Game game,
+            NewAxis.Models.ModType modType,
+            GameRepositoryClient repoClient)
+        {
+            var gameInstallPath = game.InstallPath;
+            if (string.IsNullOrEmpty(gameInstallPath) || game.Tag is not GameIndexEntry gameEntry)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var executablePath = gameEntry.ExecutablePath ?? "";
+            var relativeExecutablePath = gameEntry.RelativeExecutablePath ?? "";
+            var targetDirectory = Path.Combine(gameInstallPath, relativeExecutablePath);
+            var fullExecutablePath = Path.Combine(gameInstallPath, relativeExecutablePath, Path.GetFileName(executablePath));
+
+            if (!File.Exists(fullExecutablePath) && File.Exists(Path.Combine(gameInstallPath, executablePath)))
+            {
+                fullExecutablePath = Path.Combine(gameInstallPath, executablePath);
+            }
+            else if (!File.Exists(fullExecutablePath))
+            {
+                var executables = Directory.EnumerateFiles(gameInstallPath, "*.exe", SearchOption.AllDirectories)
+                    .Where(x => !Path.GetFileName(x).Contains("launch", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("web", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("crash", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("install", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("editor", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("physx", StringComparison.InvariantCultureIgnoreCase))
+                    .Where(x => !Path.GetFileName(x).Contains("ENU", StringComparison.InvariantCultureIgnoreCase))
+                    .OrderByDescending(x => new FileInfo(x).Length);
+
+                if (executables.Any())
+                {
+                    fullExecutablePath = executables.First();
+                }
+            }
+
+            if (File.Exists(fullExecutablePath))
+            {
+                targetDirectory = Path.GetDirectoryName(fullExecutablePath) ?? targetDirectory;
+            }
+
+            return await Task.Run(async () =>
+            {
+                var pendingFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                if (modType == ModType.Native && !string.IsNullOrEmpty(gameEntry.CommunityModPath))
+                {
+                    var communityArchivePath = await DownloadFileAsync(repoClient, gameEntry.CommunityModPath);
+                    foreach (var relativePath in EnumerateArchiveRelativePaths(
+                        communityArchivePath,
+                        entry => !string.Equals(Path.GetFileName(entry.Key ?? string.Empty), gameEntry.CommunityReshadeEntryPoint, StringComparison.OrdinalIgnoreCase),
+                        logEntries: true,
+                        logContext: "community mod package"))
+                    {
+                        pendingFiles.Add(Path.GetRelativePath(gameInstallPath, Path.Combine(targetDirectory, relativePath)));
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(gameEntry.CommunityReshadeEntryPoint))
+                    {
+                        var reshadeLocalPath = await DownloadFileAsync(repoClient, "Global/Reshade/reshade.zip");
+                        foreach (var relativePath in EnumerateReshadeRuntimeRelativePaths(reshadeLocalPath, fullExecutablePath, gameEntry.CommunityReshadeEntryPoint!))
+                        {
+                            pendingFiles.Add(Path.GetRelativePath(gameInstallPath, Path.Combine(targetDirectory, relativePath)));
+                        }
+
+                        pendingFiles.Add(Path.GetRelativePath(gameInstallPath, Path.Combine(targetDirectory, "3DGameBridge.addon")));
+                    }
+                }
+
+                return pendingFiles;
+            });
+        }
+
+        private static async Task<List<string>> ExtractCommunityModWithSharpCompressAsync(string archivePath, string targetDirectory, string? excludedDllName, Action? onInstalled = null)
+        {
+            return await Task.Run(() =>
+            {
+                var installedFiles = new List<string>();
+                Directory.CreateDirectory(targetDirectory);
+
+                using var archive = SevenZipArchive.Open(archivePath);
+                using var reader = archive.ExtractAllEntries();
+
+                while (reader.MoveToNextEntry())
+                {
+                    if (reader.Entry.IsDirectory || string.IsNullOrEmpty(reader.Entry.Key))
+                    {
+                        continue;
+                    }
+
+                    string fileName = Path.GetFileName(reader.Entry.Key);
+                    if (!string.IsNullOrWhiteSpace(excludedDllName) &&
+                        string.Equals(fileName, excludedDllName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    reader.WriteEntryToDirectory(targetDirectory, new ExtractionOptions
+                    {
+                        ExtractFullPath = true,
+                        Overwrite = true
+                    });
+
+                    string extractPath = Path.Combine(
+                        targetDirectory,
+                        reader.Entry.Key.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
+                    installedFiles.Add(extractPath);
+                    onInstalled?.Invoke();
+                }
+
+                return installedFiles;
+            });
+        }
+
+        private static bool TryIsArchiveDataError(Exception ex)
+        {
+            if (ex.Message.Contains("Data Error", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return ex.InnerException != null && TryIsArchiveDataError(ex.InnerException);
         }
 
         /// <summary>
@@ -414,7 +646,7 @@ namespace NewAxis.Services
             Trace.WriteLine($"[ModInstaller] Disabled blacklisted file: {fn}");
         }
 
-        public static async Task UninstallModAsync(string gameInstallPath, bool deleteBackups = false)
+        public static async Task UninstallModAsync(string gameInstallPath, bool deleteBackups = false, IProgress<ModProgressInfo>? progress = null, IReadOnlySet<string>? skipDeleteRelativePaths = null)
         {
             var filesListPath = Path.Combine(gameInstallPath, MOD_FILES_LIST);
             if (!File.Exists(filesListPath))
@@ -425,36 +657,247 @@ namespace NewAxis.Services
 
             Trace.WriteLine("[ModInstaller] Restoring original files...");
             var installedFiles = await File.ReadAllLinesAsync(filesListPath);
+            int totalFiles = installedFiles.Count(x => !string.IsNullOrWhiteSpace(x));
+            int processedFiles = 0;
 
-            foreach (var relativePath in installedFiles)
+            progress?.Report(new ModProgressInfo
             {
-                if (string.IsNullOrWhiteSpace(relativePath)) continue;
+                Status = "Preparing",
+                Processed = 0,
+                Total = totalFiles
+            });
 
-                var fullPath = Path.Combine(gameInstallPath, relativePath);
-                if (File.Exists(fullPath))
+            await Task.Run(() =>
+            {
+                foreach (var relativePath in installedFiles)
                 {
-                    var backupPath = fullPath + ".disabled";
-                    if (File.Exists(backupPath))
-                    {
-                        File.Copy(backupPath, fullPath, overwrite: true);
-                        Trace.WriteLine($"[ModInstaller] Restored: {relativePath}");
+                    if (string.IsNullOrWhiteSpace(relativePath)) continue;
 
-                        if (deleteBackups)
+                    var fullPath = Path.Combine(gameInstallPath, relativePath);
+                    bool shouldSkipDelete = skipDeleteRelativePaths?.Contains(relativePath) == true;
+                    if (File.Exists(fullPath))
+                    {
+                        var backupPath = fullPath + ".disabled";
+                        if (File.Exists(backupPath))
                         {
-                            File.Delete(backupPath);
+                            File.Copy(backupPath, fullPath, overwrite: true);
+                            Trace.WriteLine($"[ModInstaller] Restored: {relativePath}");
+
+                            if (deleteBackups)
+                            {
+                                File.Delete(backupPath);
+                            }
+                        }
+                        else if (!shouldSkipDelete)
+                        {
+                            File.Delete(fullPath);
+                            Trace.WriteLine($"[ModInstaller] Deleted: {relativePath}");
+                        }
+                        else
+                        {
+                            Trace.WriteLine($"[ModInstaller] Skipped delete (will be overwritten): {relativePath}");
                         }
                     }
-                    else
-                    {
-                        File.Delete(fullPath);
-                        Trace.WriteLine($"[ModInstaller] Deleted: {relativePath}");
-                    }
-                }
-            }
 
+                    processedFiles++;
+                    progress?.Report(new ModProgressInfo
+                    {
+                        Status = "Preparing",
+                        Processed = processedFiles,
+                        Total = totalFiles
+                    });
+                }
+            });
 
             File.Delete(filesListPath);
             Trace.WriteLine("[ModInstaller] Mod uninstalled successfully");
+            progress?.Report(new ModProgressInfo
+            {
+                Status = "Preparing",
+                Processed = totalFiles,
+                Total = totalFiles
+            });
+        }
+
+        public static int GetTrackedModFileCount(string gameInstallPath)
+        {
+            var filesListPath = Path.Combine(gameInstallPath, MOD_FILES_LIST);
+            if (!File.Exists(filesListPath))
+            {
+                return 0;
+            }
+
+            return File.ReadLines(filesListPath).Count(x => !string.IsNullOrWhiteSpace(x));
+        }
+
+        private static int CountArchiveFiles(string archivePath, Func<IArchiveEntry, bool>? predicate = null, bool logEntries = false, string? logContext = null)
+        {
+            return EnumerateArchiveRelativePaths(archivePath, predicate, logEntries, logContext).Count;
+        }
+
+        private static List<string> EnumerateArchiveRelativePaths(string archivePath, Func<IArchiveEntry, bool>? predicate = null, bool logEntries = false, string? logContext = null)
+        {
+            using var archive = ArchiveFactory.Open(archivePath);
+            var results = archive.Entries
+                .Where(entry => !entry.IsDirectory && !string.IsNullOrEmpty(entry.Key) && (predicate == null || predicate(entry)))
+                .Select(entry => entry.Key!.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar))
+                .ToList();
+
+            if (logEntries && results.Count > 0)
+            {
+                Trace.WriteLine($"[ModInstaller] Counted {results.Count} files from {Path.GetFileName(archivePath)}{(string.IsNullOrWhiteSpace(logContext) ? string.Empty : $" ({logContext})")}:");
+            }
+            else if (logEntries)
+            {
+                Trace.WriteLine($"[ModInstaller] No files found in {Path.GetFileName(archivePath)}{(string.IsNullOrWhiteSpace(logContext) ? string.Empty : $" ({logContext})")}");
+            }
+
+            return results;
+        }
+
+        private static IEnumerable<string> EnumerateReshadeRuntimeRelativePaths(string archivePath, string executablePath, string targetDllName)
+        {
+            string tempExtractDir = Path.Combine(Path.GetTempPath(), $"ReshadePreview_{Guid.NewGuid():N}");
+            Directory.CreateDirectory(tempExtractDir);
+
+            try
+            {
+                ReshadeExtractor.ExtractArchiveByArchitecturePreview(archivePath, executablePath, tempExtractDir);
+                return EnumerateInstalledReshadeRelativePaths(tempExtractDir, targetDllName, true).ToArray();
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(tempExtractDir))
+                    {
+                        Directory.Delete(tempExtractDir, recursive: true);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static IEnumerable<string> EnumerateInstalledReshadeRelativePaths(string sourceDir, string targetDllName, bool excludeSpatialLabs)
+        {
+            var allFiles = Directory.GetFiles(sourceDir, "*.*", SearchOption.AllDirectories);
+            var dllFiles = allFiles.Where(f => f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                .Where(f => !excludeSpatialLabs || !ReshadeExtractor.IsObsoleteReshadeFile(Path.GetFileName(f)))
+                .ToArray();
+
+            var otherFiles = allFiles.Where(f => !f.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                .Where(f => !excludeSpatialLabs || !ReshadeExtractor.IsObsoleteReshadeFile(Path.GetFileName(f)))
+                .ToArray();
+
+            foreach (var srcDll in dllFiles)
+            {
+                var fileName = Path.GetFileName(srcDll);
+                if (fileName.Contains("reshade", StringComparison.OrdinalIgnoreCase) || dllFiles.Length == 1)
+                {
+                    yield return targetDllName;
+                }
+                else
+                {
+                    yield return fileName;
+                }
+            }
+
+            foreach (var srcFile in otherFiles)
+            {
+                yield return Path.GetFileName(srcFile);
+            }
+        }
+
+        private sealed class ModInstallProgressTracker
+        {
+            private readonly string _status;
+            private readonly IProgress<ModProgressInfo>? _progress;
+            private readonly object _sync = new();
+            private int _processed;
+            private int? _total;
+            private int _lastReportedProcessed = -1;
+            private long _lastReportTick;
+
+            public ModInstallProgressTracker(string status, IProgress<ModProgressInfo>? progress)
+            {
+                _status = status;
+                _progress = progress;
+            }
+
+            public void AddToTotal(int amount)
+            {
+                if (amount <= 0)
+                {
+                    return;
+                }
+
+                lock (_sync)
+                {
+                    _total = (_total ?? 0) + amount;
+                    ReportLocked();
+                }
+            }
+
+            public void Advance(int amount = 1)
+            {
+                if (amount <= 0)
+                {
+                    return;
+                }
+
+                lock (_sync)
+                {
+                    _processed += amount;
+                    if (_total.HasValue && _processed > _total.Value)
+                    {
+                        _total = _processed;
+                    }
+
+                    ReportLocked();
+                }
+            }
+
+            public void Complete()
+            {
+                lock (_sync)
+                {
+                    _total = Math.Max(_processed, _total ?? 0);
+                    _processed = _total.Value;
+                    ReportLocked();
+                }
+            }
+
+            private void ReportLocked()
+            {
+                if (_progress == null)
+                {
+                    return;
+                }
+
+                bool isComplete = _total.HasValue && _processed >= _total.Value;
+                long now = Environment.TickCount64;
+                bool shouldReport = _lastReportedProcessed < 0
+                    || isComplete
+                    || (_processed - _lastReportedProcessed) >= 32
+                    || (now - _lastReportTick) >= 100;
+
+                if (!shouldReport)
+                {
+                    return;
+                }
+
+                _lastReportedProcessed = _processed;
+                _lastReportTick = now;
+
+                _progress?.Report(new ModProgressInfo
+                {
+                    Status = _status,
+                    Processed = _processed,
+                    Total = _total
+                });
+            }
         }
 
         private static async Task<string> DownloadFileAsync(GameRepositoryClient repoClient, string urlOrPath)

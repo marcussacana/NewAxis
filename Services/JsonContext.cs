@@ -6,6 +6,7 @@ namespace NewAxis.Services
     [JsonSerializable(typeof(GameIndex))]
     [JsonSerializable(typeof(UpdateInfo))]
     [JsonSerializable(typeof(GameIndexEntry))]
+    [JsonSerializable(typeof(CommunityModManifest))]
     [JsonSerializable(typeof(ImageUrls))]
     [JsonSerializable(typeof(FileUrls))]
     [JsonSerializable(typeof(List<GameIndexEntry>))]

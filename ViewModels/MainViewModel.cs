@@ -10,7 +10,7 @@ using SixLabors.ImageSharp.Processing;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.IO;
-using System.Text.Json.Serialization;
+using System.Text.Json;
 
 namespace NewAxis.ViewModels;
 
@@ -40,6 +40,7 @@ public class MainViewModel : ViewModelBase
 
     private const string DEFAULT_MOD_REPO = "https://raw.githubusercontent.com/marcussacana/NewAxisData/refs/heads/master/";
     private string _appliedRepoUrl = DEFAULT_MOD_REPO;
+    private readonly bool _isRepoForcedByArgs;
 
     private string _modRepoUrl = DEFAULT_MOD_REPO;
     public string MOD_REPO_BASE
@@ -356,7 +357,13 @@ public class MainViewModel : ViewModelBase
     {
         get
         {
-            if (ModTypeExtensions.FromDescription(SelectedMod) == ModType.ThreeDPlus)
+            var resolvedCreator = SelectedGame?.ResolveCreator(SelectedMod);
+            if (!string.IsNullOrWhiteSpace(resolvedCreator))
+            {
+                return resolvedCreator;
+            }
+
+            if (ResolveSelectedModType() == ModType.ThreeDPlus)
             {
                 return "cybereality";
             }
@@ -532,6 +539,7 @@ public class MainViewModel : ViewModelBase
         // Use command-line argument if provided, otherwise use config
         if (!string.IsNullOrEmpty(Program.CustomRepoPath))
         {
+            _isRepoForcedByArgs = true;
             _appliedRepoUrl = Program.CustomRepoPath;
             var fullPath = Path.GetFullPath(_appliedRepoUrl);
             Trace.WriteLine($"[MainViewModel] CWD: {Directory.GetCurrentDirectory()}");
@@ -749,14 +757,16 @@ public class MainViewModel : ViewModelBase
             _ = RefreshGamesListAsync();
 
             var index = await _repoClient.GetGameIndexAsync();
+            var communityGame = await LoadCommunityGameAsync();
 
             Trace.WriteLine($"Loaded {index.TotalGames} games from repository");
 
             var notFoundGames = new List<Game>();
 
+            var gamesData = _iniParser.GetSection("Games");
+
             if (index.Games != null)
             {
-                var gamesData = _iniParser.GetSection("Games");
                 if (gamesData != null)
                 {
                     foreach (var kvp in gamesData)
@@ -813,6 +823,16 @@ public class MainViewModel : ViewModelBase
                 });
             }
 
+            if (communityGame != null && _allGames.All(g => !string.Equals(g.Name, communityGame.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (gamesData != null && gamesData.TryGetValue(communityGame.Name, out var savedInstallPath) && !string.IsNullOrWhiteSpace(savedInstallPath))
+                {
+                    communityGame.InstallPath = savedInstallPath;
+                }
+
+                _allGames.Add(communityGame);
+            }
+
             _allGames.AddRange(notFoundGames);
 
             await RefreshGamesListAsync();
@@ -852,9 +872,12 @@ public class MainViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(gameEntry.ShaderMod) && !string.IsNullOrEmpty(gameEntry.MigotoPath)) mods.Add(ModType.ThreeDUltra);
         if (!string.IsNullOrEmpty(gameEntry.ReshadePath)) mods.Add(ModType.ThreeDPlus);
         if (!string.IsNullOrEmpty(gameEntry.NativeReshade)) mods.Add(ModType.Native);
+        if (!string.IsNullOrEmpty(gameEntry.CommunityModPath)) mods.Add(ModType.Native);
 
         var game = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => new Game(gameName, "", mods) { Tag = gameEntry });
         if (gameEntry.Creator != null) game.Creator = gameEntry.Creator;
+        game.SupportedModsMap = BuildSupportedModsMap(gameEntry, mods);
+        game.ModCreditsMap = BuildModCreditsMap(gameEntry, gameEntry.Creator);
         if (!string.IsNullOrEmpty(gameEntry.DirectoryName))
         {
             var detectedPath = GamePathScanner.FindGameDirectory(gameEntry, hintPath);
@@ -867,6 +890,105 @@ public class MainViewModel : ViewModelBase
         }
 
         return game;
+    }
+
+    private Dictionary<string, ModType> BuildSupportedModsMap(GameIndexEntry gameEntry, List<ModType> mods)
+    {
+        var map = new Dictionary<string, ModType>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var mod in mods.Distinct())
+        {
+            string label = mod.GetDescription();
+            if (mod == ModType.Native && !string.IsNullOrWhiteSpace(gameEntry.CommunityModType))
+            {
+                label = gameEntry.CommunityModType!;
+            }
+
+            map[label] = mod;
+        }
+
+        return map;
+    }
+
+    private Dictionary<string, string> BuildModCreditsMap(GameIndexEntry gameEntry, string? defaultCreator)
+    {
+        var credits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(gameEntry.CommunityModType) && !string.IsNullOrWhiteSpace(gameEntry.CommunityCredit))
+        {
+            credits[gameEntry.CommunityModType!] = gameEntry.CommunityCredit!;
+        }
+
+        if (!string.IsNullOrWhiteSpace(defaultCreator))
+        {
+            credits["3D Ultra"] = defaultCreator!;
+            credits["Native"] = defaultCreator!;
+        }
+
+        credits["Rendepth"] = "cybereality";
+        credits["3D+"] = "cybereality";
+        return credits;
+    }
+
+    private async Task<Game?> LoadCommunityGameAsync()
+    {
+        if (_repoClient == null)
+        {
+            return null;
+        }
+
+        string communityPath = Path.Combine(_repoClient.REPO_BASE, "community.json");
+        if (!File.Exists(communityPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(communityPath);
+            var manifest = JsonSerializer.Deserialize(json, AppJsonContext.Default.CommunityModManifest);
+            if (manifest == null || string.IsNullOrWhiteSpace(manifest.ModPath))
+            {
+                return null;
+            }
+
+            string normalizedModPath = manifest.ModPath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            string? communityDir = Path.GetDirectoryName(normalizedModPath);
+            string inferredGameName = !string.IsNullOrWhiteSpace(communityDir)
+                ? Path.GetFileName(communityDir)
+                : Path.GetFileNameWithoutExtension(normalizedModPath);
+            string gameName = string.IsNullOrWhiteSpace(manifest.GameName) ? inferredGameName : manifest.GameName!;
+            var entry = new GameIndexEntry
+            {
+                GameName = gameName,
+                DirectoryName = gameName,
+                SteamAppId = manifest.SteamAppId,
+                ExecutablePath = manifest.ExecutablePath ?? string.Empty,
+                RelativeExecutablePath = manifest.RelativeExecutablePath ?? string.Empty,
+                CommunityModPath = manifest.ModPath,
+                CommunityReshadeEntryPoint = manifest.ReshadeEntryPoint,
+                CommunityModType = string.IsNullOrWhiteSpace(manifest.ModType) ? "Community" : manifest.ModType,
+                CommunityCredit = manifest.Credit,
+                Images = new ImageUrls
+                {
+                    Logo = !string.IsNullOrWhiteSpace(communityDir) ? $"{communityDir}/images/logo.png" : null,
+                    Wallpaper = !string.IsNullOrWhiteSpace(communityDir) ? $"{communityDir}/images/wallpaper.jpg" : null,
+                    Icon = !string.IsNullOrWhiteSpace(communityDir) ? $"{communityDir}/images/icon.jpg" : null
+                }
+            };
+
+            return await LoadGame(entry, gameName);
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"Error loading community.json: {ex.Message}");
+            return null;
+        }
+    }
+
+    private ModType? ResolveSelectedModType()
+    {
+        return SelectedGame?.ResolveModType(SelectedMod) ?? ModTypeExtensions.FromDescription(SelectedMod);
     }
 
     private void LoadConfig()
@@ -954,10 +1076,14 @@ public class MainViewModel : ViewModelBase
     {
         IsSettingsOpen = false;
 
-        bool repoChanged = _appliedRepoUrl != _modRepoUrl;
+        string desiredRepoUrl = _isRepoForcedByArgs && !string.IsNullOrWhiteSpace(Program.CustomRepoPath)
+            ? Program.CustomRepoPath
+            : _modRepoUrl;
+
+        bool repoChanged = _appliedRepoUrl != desiredRepoUrl;
         if (repoChanged)
         {
-            _appliedRepoUrl = _modRepoUrl;
+            _appliedRepoUrl = desiredRepoUrl;
             _repoClient = new GameRepositoryClient(_appliedRepoUrl);
             _ = LoadGamesFromRepositoryAsync();
         }
@@ -1112,13 +1238,19 @@ public class MainViewModel : ViewModelBase
             return;
         }
 
-        ModType? modType = ModTypeExtensions.FromDescription(SelectedMod);
-
-        IsGameSessionActive = true;
+        ModType? modType = ResolveSelectedModType();
+        var preparingProgress = CreateOverlayProgressReporter(Localization["PreparingData"]);
+        IReadOnlySet<string>? pendingInstallFiles = null;
 
         try
         {
-            await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
+            if (modType != null && _repoClient != null && !string.IsNullOrEmpty(SelectedMod))
+            {
+                pendingInstallFiles = await ModInstaller.GetPendingInstallFilesAsync(SelectedGame, modType.Value, _repoClient);
+            }
+
+            SetLoadingOverlay(true, Localization["PreparingData"]);
+            await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false, preparingProgress, pendingInstallFiles);
 
             if (!string.IsNullOrEmpty(SelectedMod) && _repoClient != null)
             {
@@ -1143,7 +1275,8 @@ public class MainViewModel : ViewModelBase
                         SelectedGame,
                         modType!.Value,
                         _repoClient,
-                        settings);
+                        settings,
+                        preparingProgress);
                 }
                 else
                 {
@@ -1153,10 +1286,7 @@ public class MainViewModel : ViewModelBase
 
             SyncTrueGameIni(SelectedGame);
 
-            var exePath = Path.Combine(
-                SelectedGame.InstallPath,
-                gameEntry.RelativeExecutablePath ?? "",
-                gameEntry.ExecutablePath ?? "");
+            var exePath = ResolveLaunchExecutablePath(SelectedGame.InstallPath, gameEntry);
 
             var acfPath = Path.Combine(Path.GetFullPath($"..\\..\\appmanifest_{gameEntry.SteamAppId}.acf", SelectedGame.InstallPath));
 
@@ -1189,6 +1319,8 @@ public class MainViewModel : ViewModelBase
 
                 Trace.WriteLine($"Launching Steam game: {steamUrl}");
 
+                IsGameSessionActive = true;
+
                 process = Process.Start(new ProcessStartInfo
                 {
                     FileName = steamUrl,
@@ -1197,26 +1329,16 @@ public class MainViewModel : ViewModelBase
             }
             else
             {
-                if (!File.Exists(exePath))
+                if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
                 {
                     Trace.WriteLine($"Executable not found: {exePath}");
-
-                    var otherExes = Directory.GetFiles(SelectedGame.InstallPath, Path.GetFileName(exePath), SearchOption.AllDirectories);
-
-                    if (otherExes.Length > 0)
-                    {
-                        exePath = otherExes.First();
-                        Trace.WriteLine($"Found hinted executable: {exePath}");
-                    }
-                    else
-                    {
-
-                        IsGameSessionActive = false;
-                        return;
-                    }
+                    IsGameSessionActive = false;
+                    return;
                 }
 
                 Trace.WriteLine($"Starting game: {exePath}");
+
+                IsGameSessionActive = true;
 
                 var startInfo = new ProcessStartInfo
                 {
@@ -1252,8 +1374,8 @@ public class MainViewModel : ViewModelBase
                 if (InstallModTemporarily && !string.IsNullOrEmpty(SelectedMod))
                 {
                     SetLoadingOverlay(true, Localization["RestoringData"]);
-
-                    await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false);
+                    var restoringProgress = CreateOverlayProgressReporter(Localization["RestoringData"]);
+                    await ModInstaller.UninstallModAsync(SelectedGame.InstallPath, deleteBackups: false, restoringProgress);
                     Trace.WriteLine("Temporary mod uninstalled");
 
                     SetLoadingOverlay(false);
@@ -1299,6 +1421,30 @@ public class MainViewModel : ViewModelBase
             IsProgressOverlayVisible = overlayVisible;
             IsProgressOverlayError = isError;
         });
+    }
+
+    private IProgress<ModProgressInfo> CreateOverlayProgressReporter(string baseStatus)
+    {
+        return new Progress<ModProgressInfo>(update =>
+        {
+            ProgressOverlayMessage = FormatOverlayProgressMessage(baseStatus, update);
+        });
+    }
+
+    private static string FormatOverlayProgressMessage(string baseStatus, ModProgressInfo? update)
+    {
+        if (update == null)
+        {
+            return baseStatus;
+        }
+
+        if (update.Total.HasValue && update.Total.Value > 0)
+        {
+            int percent = (int)Math.Clamp(Math.Round((double)update.Processed * 100 / update.Total.Value), 0, 100);
+            return $"{baseStatus} ({percent}%)";
+        }
+
+        return baseStatus;
     }
 
     private async Task WaitGameExit()
@@ -1393,6 +1539,39 @@ public class MainViewModel : ViewModelBase
         {
             SelectedMod = mod;
         }
+    }
+
+    private string? ResolveLaunchExecutablePath(string installPath, GameIndexEntry gameEntry)
+    {
+        var candidates = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(gameEntry.ExecutablePath))
+        {
+            candidates.Add(Path.Combine(
+                installPath,
+                gameEntry.RelativeExecutablePath ?? string.Empty,
+                gameEntry.ExecutablePath));
+            candidates.Add(Path.Combine(installPath, gameEntry.ExecutablePath));
+        }
+
+        foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return Directory.EnumerateFiles(installPath, "*.exe", SearchOption.AllDirectories)
+            .Where(x => !Path.GetFileName(x).Contains("launch", StringComparison.InvariantCultureIgnoreCase))
+            .Where(x => !Path.GetFileName(x).Contains("web", StringComparison.InvariantCultureIgnoreCase))
+            .Where(x => !Path.GetFileName(x).Contains("crash", StringComparison.InvariantCultureIgnoreCase))
+            .Where(x => !Path.GetFileName(x).Contains("install", StringComparison.InvariantCultureIgnoreCase))
+            .Where(x => !Path.GetFileName(x).Contains("editor", StringComparison.InvariantCultureIgnoreCase))
+            .Where(x => !Path.GetFileName(x).Contains("physx", StringComparison.InvariantCultureIgnoreCase))
+            .Where(x => !Path.GetFileName(x).Contains("ENU", StringComparison.InvariantCultureIgnoreCase))
+            .OrderByDescending(x => new FileInfo(x).Length)
+            .FirstOrDefault();
     }
 
     private void LoadGameConfig(Game? game)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System;
 
 namespace NewAxis.Models;
 
@@ -117,7 +118,32 @@ public class Game : INotifyPropertyChanged
         }
     }
 
-    public List<string> SupportedMods => SupportedModTypes.Select(type => type.GetDescription()).ToList();
+    private Dictionary<string, ModType> _supportedModsMap = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, ModType> SupportedModsMap
+    {
+        get => _supportedModsMap;
+        set
+        {
+            _supportedModsMap = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SupportedMods));
+        }
+    }
+
+    private Dictionary<string, string> _modCreditsMap = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, string> ModCreditsMap
+    {
+        get => _modCreditsMap;
+        set
+        {
+            _modCreditsMap = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public List<string> SupportedMods => SupportedModsMap.Count > 0
+        ? SupportedModsMap.Keys.ToList()
+        : SupportedModTypes.Select(type => type.GetDescription()).ToList();
 
     public object? Tag { get; set; }
 
@@ -128,6 +154,34 @@ public class Game : INotifyPropertyChanged
         Name = name;
         InstallPath = installPath;
         SupportedModTypes = mods;
+        SupportedModsMap = mods
+            .Distinct()
+            .ToDictionary(type => type.GetDescription(), type => type, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public ModType? ResolveModType(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return null;
+        }
+
+        if (SupportedModsMap.TryGetValue(displayName, out var modType))
+        {
+            return modType;
+        }
+
+        return ModTypeExtensions.FromDescription(displayName);
+    }
+
+    public string? ResolveCreator(string? displayName)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return null;
+        }
+
+        return ModCreditsMap.TryGetValue(displayName, out var creator) ? creator : null;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

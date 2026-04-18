@@ -29,7 +29,8 @@ namespace NewAxis.Services
         public static async Task<List<string>> ExtractMigotoAsync(
             string migoto7zPath,
             string targetDirectory,
-            string? executablePath = null)
+            string? executablePath = null,
+            Action? onInstalled = null)
         {
             if (!File.Exists(migoto7zPath))
             {
@@ -107,13 +108,13 @@ namespace NewAxis.Services
                 if (jsonInstructionsPath != null)
                 {
                     Trace.WriteLine($"[Migoto] Found instruction file: {Path.GetFileName(jsonInstructionsPath)}");
-                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, sourceSubDir, targetDirectory);
+                    installedFiles = await ApplyJsonInstructionsAsync(jsonInstructionsPath, sourceSubDir, targetDirectory, onInstalled);
                 }
                 else
                 {
 
                     Trace.WriteLine("[Migoto] No JSON instructions found, copying all files...");
-                    installedFiles = await CopyAllFilesAsync(sourceSubDir, targetDirectory);
+                    installedFiles = await CopyAllFilesAsync(sourceSubDir, targetDirectory, onInstalled);
                 }
 
                 if (installedFiles.Any(x => Path.GetFileName(x) == "nvapi64.dll"))
@@ -125,7 +126,7 @@ namespace NewAxis.Services
                         Trace.WriteLine("[Migoto] AMD GPU detected. Applying AMD fix to nvapi64.dll...");
 
                         var fullNvapiPath = installedFiles.First(x => Path.GetFileName(x) == "nvapi64.dll");
-                        installedFiles.AddRange(await ApplyAMDfix(fullNvapiPath));
+                        installedFiles.AddRange(await ApplyAMDfix(fullNvapiPath, onInstalled));
                     }
                 }
 
@@ -146,7 +147,7 @@ namespace NewAxis.Services
             }
         }
 
-        private static async Task<string[]> ApplyAMDfix(string fullNvapiPath)
+        private static async Task<string[]> ApplyAMDfix(string fullNvapiPath, Action? onInstalled = null)
         {
             List<string> installedFiles = new();
             try
@@ -160,6 +161,7 @@ namespace NewAxis.Services
                         foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
                         {
                             await entry.WriteToDirectoryAsync(nvapiDir, new ExtractionOptions { ExtractFullPath = true, Overwrite = true });
+                            onInstalled?.Invoke();
                         }
 
                         installedFiles.AddRange(archive.Entries.Select(e => Path.Combine(nvapiDir, e.Key!)));
@@ -178,7 +180,8 @@ namespace NewAxis.Services
         private static async Task<List<string>> ApplyJsonInstructionsAsync(
             string jsonPath,
             string sourceDir,
-            string targetDirectory)
+            string targetDirectory,
+            Action? onInstalled = null)
         {
             var installedFiles = new List<string>();
             var jsonContent = await File.ReadAllTextAsync(jsonPath);
@@ -245,13 +248,14 @@ namespace NewAxis.Services
                     File.Copy(sourcePath, targetPath, overwrite: true);
                     Trace.WriteLine($"[Migoto] {fileInstruction.Source} -> {targetName}");
                     installedFiles.Add(targetPath);
+                    onInstalled?.Invoke();
                 }
             }
 
             return installedFiles;
         }
 
-        private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string targetDirectory)
+        private static async Task<List<string>> CopyAllFilesAsync(string sourceDir, string targetDirectory, Action? onInstalled = null)
         {
             var installedFiles = new List<string>();
             Directory.CreateDirectory(targetDirectory);
@@ -289,6 +293,7 @@ namespace NewAxis.Services
 
                 await Task.Run(() => File.Copy(file, targetPath, overwrite: true));
                 installedFiles.Add(targetPath);
+                onInstalled?.Invoke();
             }
 
             return installedFiles;

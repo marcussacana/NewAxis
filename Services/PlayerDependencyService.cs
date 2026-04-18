@@ -79,6 +79,8 @@ namespace NewAxis.Services
 
                 try
                 {
+                    CleanupOldFiles();
+
                     if (!EnsureRuntimeFile("libmpv-2.dll", "Global/Runtime/VideoPlayer/libmpv-2.dll", ExpectedLibMpvHash))
                     {
                         missingRequired.Add("libmpv-2.dll");
@@ -141,7 +143,36 @@ namespace NewAxis.Services
                 if (File.Exists(tempPath))
                 {
                     // Move/overwrite existing file
-                    File.Move(tempPath, targetPath, overwrite: true);
+                    try
+                    {
+                        File.Move(tempPath, targetPath, overwrite: true);
+                    }
+                    catch (IOException)
+                    {
+                        // Likely file in use. Try renaming the existing one first.
+                        Log($"File {fileName} is in use. Attempting 'rename-and-replace' strategy.");
+                        string oldPath = targetPath + ".old";
+                        try
+                        {
+                            if (File.Exists(oldPath))
+                            {
+                                File.Delete(oldPath);
+                            }
+                        }
+                        catch { /* Ignore if old is also locked */ }
+
+                        try
+                        {
+                            File.Move(targetPath, oldPath, overwrite: true);
+                            File.Move(tempPath, targetPath, overwrite: true);
+                            Log($"Successfully replaced {fileName} using rename strategy. Old version preserved as {Path.GetFileName(oldPath)}");
+                        }
+                        catch (Exception ex2)
+                        {
+                            Log($"Failed rename strategy for {fileName}: {ex2.Message}");
+                            throw; // Re-throw to be caught by outer try
+                        }
+                    }
 
                     if (!string.IsNullOrWhiteSpace(expectedHash))
                     {
@@ -239,6 +270,30 @@ namespace NewAxis.Services
             yield return Path.Combine(Environment.CurrentDirectory, "config.ini");
             yield return Path.GetFullPath(Path.Combine(AppDir, "..", "..", "..", "config.ini"));
             yield return Path.GetFullPath(Path.Combine(AppDir, "..", "..", "..", "..", "config.ini"));
+        }
+
+        private static void CleanupOldFiles()
+        {
+            try
+            {
+                var files = Directory.GetFiles(AppDir, "*.old");
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        File.Delete(file);
+                        Log($"Cleaned up old dependency file: {Path.GetFileName(file)}");
+                    }
+                    catch
+                    {
+                        // Still in use, ignore
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error during old files cleanup: {ex.Message}");
+            }
         }
 
         private static void Log(string message)

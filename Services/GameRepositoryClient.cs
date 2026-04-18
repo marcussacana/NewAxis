@@ -665,9 +665,28 @@ namespace NewAxis.Services
         public string? StartArgsUltra { get; set; }
         public string? StartArgsPlus { get; set; }
         public string? StartArgsNative { get; set; }
+        public string? CommunityModPath { get; set; }
+        public string? CommunityReshadeEntryPoint { get; set; }
+        public string? CommunityModType { get; set; }
+        public string? CommunityCredit { get; set; }
 
         public ImageUrls? Images { get; set; }
         public string? ConfigArchivePath { get; set; }
+    }
+
+    public class CommunityModManifest
+    {
+        public string? GameName { get; set; }
+        public string? ModPath { get; set; }
+        public string? ReshadeEntryPoint { get; set; }
+        public string? ModType { get; set; }
+        public string? Credit { get; set; }
+        public string? SteamAppId { get; set; }
+        public string? ExecutablePath { get; set; }
+        public string? RelativeExecutablePath { get; set; }
+        public string? LogoUrl { get; set; }
+        public string? BannerUrl { get; set; }
+        public string? IconUrl { get; set; }
     }
 
     public class ImageUrls

@@ -129,6 +129,9 @@ namespace NewAxis.Services
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern int mpv_render_context_render_subtitles(IntPtr ctx, IntPtr params_ptr);
+        
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern uint mpv_render_context_update(IntPtr ctx);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
         public static extern void mpv_render_context_free(IntPtr ctx);
@@ -319,6 +322,16 @@ namespace NewAxis.Services
             }
 
             return LibMpv.mpv_render_context_get_subtitles_redraw_id(renderContext);
+        }
+
+        public uint UpdateRenderContext(IntPtr renderContext)
+        {
+            if (renderContext == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            return LibMpv.mpv_render_context_update(renderContext);
         }
 
         public void SetProperty(string name, string value)

@@ -124,6 +124,10 @@ public partial class VideoPlayerControl
         {
             Dispatcher.UIThread.Post(() =>
             {
+                if (_mpv != null && _renderContext != IntPtr.Zero)
+                {
+                    _mpv.UpdateRenderContext(_renderContext);
+                }
                 _lastMpvUpdateUtc = DateTime.UtcNow;
                 _mpvFrameDirty = true;
                 RequestNextFrameRendering();
@@ -137,7 +141,12 @@ public partial class VideoPlayerControl
             try
             {
                 _mpv?.PollEvents();
-                if (_isPlaying && DateTime.UtcNow - _lastMpvUpdateUtc > TimeSpan.FromMilliseconds(120))
+                if (_mpv != null && _renderContext != IntPtr.Zero)
+                {
+                    _mpv.UpdateRenderContext(_renderContext);
+                }
+
+                if (_isPlaying && DateTime.UtcNow - _lastMpvUpdateUtc > TimeSpan.FromMilliseconds(100))
                 {
                     _mpvFrameDirty = true;
                     RequestNextFrameRendering();
@@ -148,7 +157,7 @@ public partial class VideoPlayerControl
             }
 
             return true;
-        }, TimeSpan.FromMilliseconds(50));
+        }, TimeSpan.FromMilliseconds(20));
     }
 
     private bool EnsureNativePlayerDependenciesReady()

@@ -1,9 +1,9 @@
-#if DEBUG
+#if DEBUG || DebugNativeAOT
 namespace NewAxis.Services;
 
 public static partial class Debug
 {
-    
+
     static partial void AttachImpl();
 
     // You can call this method to find your code location by
